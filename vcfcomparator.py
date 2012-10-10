@@ -68,6 +68,39 @@ class Variant:
     def __str__(self):
         return str(self.recA) + "\t" + str(self.recB)
 
+    def interval_score(self):
+        ''' scoring function for intervals, based on amount of overlap '''
+        # get pos,end +/- confidence intervals if present
+        iv_a = self.get_conf_interval(self.recA)
+        iv_b = self.get_conf_interval(self.recB)
+
+        # will probably need coordinates later for weighted score
+        ol_coords = get_overlap_coords(iv_a, iv_b)
+        ol_width = ol_coords[1] - ol_coords[0]
+        assert ol_width > 0
+
+        len_a = iv_a[1] - iv_a[0]
+        len_b = iv_b[1] - iv_b[0]
+        assert len_a > 0
+        assert len_b > 0
+
+        return float(2*ol_width)/float(len_a+len_b)
+
+    def get_conf_interval(self,rec):
+        ''' return confidence interval as (start-ci, end+ci)'''
+        cipos = ciend = 0
+        
+        if 'CIPOS' in rec.INFO:
+            cipos = abs(min(rec.INFO.get('CIPOS')))
+        if 'CIEND' in rec.INFO:
+            ciend = abs(max(rec.INFO.get('CIEND')))
+
+        end = rec.INFO.get('END')   
+        if not end:
+            end = rec.POS
+
+        return rec.POS-cipos, end+ciend
+
     def matched(self):
         if self.recA and self.recB:
             return True
@@ -113,24 +146,33 @@ class SNV (Variant):
             return 1.0
         return 0.0
 
+
 class INDEL (Variant):
     ''' short insertion/deletion subclass '''
     def type(self):
         pass
     def score(self):
-        pass
+        return self.interval_score()
 
 class SV (Variant):
     ''' structural variant subclass '''
     def score(self):
-        pass
+        return self.interval_score()
 
 class CNV (Variant):
     ''' copy number variant subclass '''
     def score(self):
-        pass
+        return self.interval_score()
 
 ## functions ##
+
+def get_overlap_coords(iv_a, iv_b):
+    ''' return start and end coordinates of overlap between iv_a and iv_b
+        return 0,0 if no overlap
+        iv_a or iv_b [0] is start and [1] is end '''
+    if min(iv_a[1], iv_b[1]) - max(iv_a[0], iv_b[0]) > 0: # is there overlap?
+        return max(iv_a[0], iv_b[0]), min(iv_a[1], iv_b[1])
+    return 0,0
 
 def vcfVariantMatch(recA, recB):
     ''' return True if SNV/INDEL/SV/CNV intervals match given critera for each variant type '''
