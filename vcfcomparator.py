@@ -1,0 +1,279 @@
+#!/usr/bin/env python
+
+'''
+VCF comparator: compares mutation calls in VCF formatted files
+(c) 2012 Adam Ewing (ewingad at soe.ucsc.edu)
+see LICENSE.txt for licensing inforomation
+'''
+
+import vcf
+import argparse
+import gzip
+import sys
+from re import search
+from os.path import exists
+
+## classes ##
+
+class Comparison:
+    ''' stores the result of a one-way comparison vcfA --> vcfB
+        imprements functions to report things about the comparison '''
+    def __init__(self):
+        self.vartype = {}
+        self.vartype['SNV']   = []
+        self.vartype['INDEL'] = []
+        self.vartype['CNV']   = []
+        self.vartype['SV']    = []
+
+    def summary(self):
+        for type in self.vartype.keys():
+            print type, self.matched(type), "of", len(self.vartype[type]), "alt", self.altmatched(type)
+
+    def matched(self, type):
+        ''' count number of matched variants of <type> '''
+        return reduce(lambda x, y: x+y.matched(), self.vartype[type], 0)
+
+    def altmatched(self,type):
+        ''' count number of alternate matches '''
+        return reduce(lambda x, y: x+len(y.altmatch), self.vartype[type], 0)
+
+    def count_agree_somatic(self,type):
+        pass
+
+    def count_disagree_somatic(self,type):
+        pass
+
+    def count_agree_pass(self,type):
+        pass
+
+    def count_agree_fail(self,type):
+        pass
+
+    def count_disagree_pass(self,type):
+        pass
+
+    def sum_scores(self,type):
+        pass
+
+class Variant:
+    ''' base class for variant types 
+        vcf_recA and vcf_recB are vcf._Record objects or None '''
+    def __init__(self, vcf_recA, vcf_recB, somatic=False):
+        self.recA = vcf_recA
+        self.recB = vcf_recB
+
+        # if there is more than one match, the rest are stored here
+        self.altmatch = []
+
+    def __str__(self):
+        return str(self.recA) + "\t" + str(self.recB)
+
+    def matched(self):
+        if self.recA and self.recB:
+            return True
+        return False
+
+    def has_somatic(self):
+        ''' return True if either call is somatic '''
+        ss = [recA.INFO.get('SS'), recB.INFO.get('SS')]
+        if 'Somatic' in ss:
+            return True
+        return False
+
+    def agree_somatic(self):
+        ''' return True if both calls are somatic '''
+        ss = [recA.INFO.get('SS'), recB.INFO.get('SS')]
+        if 'Germline' in ss and 'Somatic' in ss:
+            return False
+        return True
+
+    def has_pass(self):
+        ''' return True if either filter is PASS '''
+        if not recA.FILTER or not recB.FILTER:
+            return True
+        return False
+
+    def both_pass(self):
+        ''' return True if both filters are PASS '''
+        if not recA.FILTER and not recB.FILTER:
+            return True
+        return False
+
+
+class SNV (Variant):
+    ''' single nucleotide variant subclass '''
+    def type(self):
+        if self.is_transition:
+            return 'transition'
+        else:
+            return 'transversion'
+
+    def score(self):
+        if self.matched():
+            return 1.0
+        return 0.0
+
+class INDEL (Variant):
+    ''' short insertion/deletion subclass '''
+    def type(self):
+        pass
+    def score(self):
+        pass
+
+class SV (Variant):
+    ''' structural variant subclass '''
+    def score(self):
+        pass
+
+class CNV (Variant):
+    ''' copy number variant subclass '''
+    def score(self):
+        pass
+
+## functions ##
+
+def vcfVariantMatch(recA, recB):
+    ''' return True if SNV/INDEL/SV/CNV intervals match given critera for each variant type '''
+
+    # SNVs have to have the same position, ref allele, and alt allele
+    if recA.is_snp and recB.is_snp:
+        if recA.POS == recB.POS and recA.REF == recB.REF and recA.ALT == recB.ALT:
+            return True
+
+    # indels have to be within w_indel of each other, have same ref and alt alleles
+    if recA.is_indel and recB.is_indel:
+        if recA.REF == recB.REF and recA.ALT == recB.ALT:
+            return True
+
+    # SVs have to be within w_sv of each other, pass vcfIntervalMatch
+    if recA.is_sv and recB.is_sv and recA.INFO.get('SVTYPE') == recB.INFO.get('SVTYPE') == 'BND': 
+        orientA = orientSV(str(recA.ALT[0]))
+        orientB = orientSV(str(recB.ALT[0]))
+        if orientA == orientB:
+            return True
+
+    return False 
+
+def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
+    ''' does most of the work - unidirectional comparison vcfA --> vcfB
+        h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
+
+    cmp = Comparison()
+
+    for recA in h_vcfA:
+        if mask:
+            pass # FIXME not implemented
+
+        match = False
+        type = None
+        variant = None
+        w = 0
+
+        if recA.is_snp:
+            type = 'SNV'
+            variant = SNV(recA, None)
+
+        elif recA.is_indel:
+            type = 'INDEL'
+            variant = INDEL(recA, None)
+            w = w_indel
+
+        elif recA.is_sv and recA.INFO.get('SVTYPE') == 'BND':
+            type = 'SV'
+            variant = SV(recA, None)
+            w = w_sv
+
+        if type: # only compare known variant types
+            for recB in h_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
+                if vcfVariantMatch(recA, recB):
+                    if match: # handle one-to-many matches
+                        variant.altmatch.append(recB)
+                    else:
+                        variant.recB = recB
+                        match = True
+            cmp.vartype[type].append(variant)
+
+    return cmp
+
+def orientSV(alt):
+    '''
+    REF   ALT    Meaning
+    s     t[p[   piece extending to the right of p is joined after t
+    s     t]p]   reverse comp piece extending left of p is joined after t
+    s     ]p]t   piece extending to the left of p is joined before t
+    s     [p[t   reverse comp piece extending right of p is joined before t
+    '''
+    orient = alt # return info line by default
+
+    if search('^[A-Z]\[',alt):
+        orient = 'right_of_p_after_t'
+
+    elif search('^[A-Z]\]',alt):
+        orient = 'left_of_p_after_t'
+
+    elif search('^\]',alt):
+        orient = 'left_of_p_before_t'
+
+    elif search('^\[',alt):
+        orient = 'right_of_p_before_t'
+
+    return orient
+
+def openVCFs(vcf_list):
+    ''' return list of vcf file handles '''
+    vcf_handles = []
+
+    for vcf_file in vcf_list:
+        try:
+            vcf_handles.append(vcf.Reader(filename=vcf_file,compressed=True))
+        except IOError as e:
+            sys.stderr.write(str(e) + ' -- is this an indexed tabix file?\n')
+            sys.exit()
+
+    return vcf_handles
+
+def parseVCFs(vcf_list, maskfile=None):
+    ''' handle the list of vcf files
+        handle errors '''
+
+    vcf_handles = openVCFs(vcf_list) 
+
+    # give some warnings if the comparison is between different samples
+    try:
+        if len(vcf_handles[0].metadata['SAMPLE']) != len(vcf_handles[1].metadata['SAMPLE']):
+            sys.write.stderr("warning: vcfs have different numbers of samples")
+        else:
+            for i in range(len(vcf_handles[0].metadata['SAMPLE'])):
+                if vcf_handles[0].metadata['SAMPLE'][i]['Individual'] != vcf_handles[1].metadata['SAMPLE'][i]['Individual']:
+                    sys.stderr.write("warning: comparing two different individuals: " +
+                                     vcf_handles[0].metadata['SAMPLE'][i]['Individual'] + " " +
+                                     vcf_handles[1].metadata['SAMPLE'][i]['Individual'] + "\n")
+                    break
+    except KeyError as e:
+        sys.stderr.write("Invalid header, make sure vcf has for following metadata: " + str(e) + "\n")
+        sys.exit()
+
+    # compare VCFs
+    try:
+        sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
+        result01 = compareVCFs(vcf_handles[0], vcf_handles[1])
+        result01.summary()
+
+        vcf_handles = openVCFs(vcf_list) 
+
+        sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
+        result10 = compareVCFs(vcf_handles[1], vcf_handles[0])
+        result10.summary()
+
+    except ValueError as e:
+        sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
+
+def main(args):
+    parseVCFs(args.vcf)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
+    parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
+    parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
+    args = parser.parse_args()
+    main(args)
