@@ -32,10 +32,16 @@ class testVCFcomparator(unittest.TestCase):
 
     def testMatchedSVScore(self):
         self.assertEqual(self.matchedSV.score(), 1.0)
+        self.assertEqual(self.matchedSV.score(density=True), 1.0)
 
     def testOverlapSVScore(self):
         self.assertLess(self.overlapSV.score(),1.0)
+        self.assertLess(self.overlapSV.score(density=True),1.0)
         self.assertGreater(self.overlapSV.score(),0.0)
+        self.assertGreater(self.overlapSV.score(density=True),0.0)
+
+        # turning density on should decrease the score for a partial overlap
+        self.assertLess(self.overlapSV.score(density=True),self.overlapSV.score(density=False))
 
 if __name__ == '__main__':
     unittest.main()

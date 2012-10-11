@@ -12,6 +12,8 @@ import gzip
 import sys
 from re import search
 from os.path import exists
+from scipy.stats import norm
+from numpy import interp
 
 ## classes ##
 
@@ -68,13 +70,12 @@ class Variant:
     def __str__(self):
         return str(self.recA) + "\t" + str(self.recB)
 
-    def interval_score(self):
+    def interval_score(self, density=False):
         ''' scoring function for intervals, based on amount of overlap '''
         # get pos,end +/- confidence intervals if present
         iv_a = self.get_conf_interval(self.recA)
         iv_b = self.get_conf_interval(self.recB)
 
-        # will probably need coordinates later for weighted score
         ol_coords = get_overlap_coords(iv_a, iv_b)
         ol_width = ol_coords[1] - ol_coords[0]
         assert ol_width > 0
@@ -84,7 +85,18 @@ class Variant:
         assert len_a > 0
         assert len_b > 0
 
-        return float(2*ol_width)/float(len_a+len_b)
+
+        s = float(2*ol_width)/float(len_a+len_b)
+        if density: # weight overlap based on cumulative density of normal distribution
+            den_a = 1.0
+            den_b = 1.0
+            if ol_width < len_a:
+                den_a = interval_density(iv_a, ol_coords)
+            if ol_width < len_b:
+                den_b = interval_density(iv_b, ol_coords)
+            s = s * den_a * den_b
+
+        return s
 
     def get_conf_interval(self,rec):
         ''' return confidence interval as (start-ci, end+ci)'''
@@ -151,18 +163,18 @@ class INDEL (Variant):
     ''' short insertion/deletion subclass '''
     def type(self):
         pass
-    def score(self):
-        return self.interval_score()
+    def score(self, density=False):
+        return self.interval_score(density)
 
 class SV (Variant):
     ''' structural variant subclass '''
-    def score(self):
-        return self.interval_score()
+    def score(self, density=False):
+        return self.interval_score(density)
 
 class CNV (Variant):
     ''' copy number variant subclass '''
-    def score(self):
-        return self.interval_score()
+    def score(self, density=False):
+        return self.interval_score(density)
 
 ## functions ##
 
@@ -173,6 +185,29 @@ def get_overlap_coords(iv_a, iv_b):
     if min(iv_a[1], iv_b[1]) - max(iv_a[0], iv_b[0]) > 0: # is there overlap?
         return max(iv_a[0], iv_b[0]), min(iv_a[1], iv_b[1])
     return 0,0
+
+def interval_density(iv, window):
+    # set left = 0 and rescale to (-3,3) (adjusting will change how quickly the score function drops off at extremes)
+    norm_scale = [-3.0, 3.0]
+    iv_scale = [0.0, float(iv[1]-iv[0])]
+
+    rel_w_start = window[0] - iv[0]
+    rel_w_end = window[1] - iv[0]
+
+    w_s  = interp(rel_w_start, iv_scale, norm_scale)
+    w_e  = interp(rel_w_end, iv_scale, norm_scale)
+
+    return norm_density(w_s, w_e)
+
+def norm_density(start,end):
+    start = float(start)
+    end = float(end)
+
+    rv = norm()
+    d_left = rv.cdf(start)
+    d_right = 1.0 - rv.cdf(end)
+
+    return 1.0 - d_left - d_right
 
 def vcfVariantMatch(recA, recB):
     ''' return True if SNV/INDEL/SV/CNV intervals match given critera for each variant type '''
