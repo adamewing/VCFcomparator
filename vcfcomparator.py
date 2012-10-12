@@ -187,6 +187,8 @@ def get_overlap_coords(iv_a, iv_b):
     return 0,0
 
 def interval_density(iv, window):
+    ''' returns cumulative density of a window over a rescaled interval (iv)'''
+
     # set left = 0 and rescale to (-3,3) (adjusting will change how quickly the score function drops off at extremes)
     norm_scale = [-3.0, 3.0]
     iv_scale = [0.0, float(iv[1]-iv[0])]
@@ -200,6 +202,7 @@ def interval_density(iv, window):
     return norm_density(w_s, w_e)
 
 def norm_density(start,end):
+    ''' return cumulative denisty of normal distribution (from start to end)'''
     start = float(start)
     end = float(end)
 
