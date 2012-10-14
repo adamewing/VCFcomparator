@@ -49,15 +49,15 @@ class Comparison:
 
     def count_agree_pass(self,type):
         ''' count number of matches that agree on passing filters given variant type'''
-        pass
+        return reduce(lambda x, y: x+y.both_pass(), self.vartype[type], 0)
 
     def count_agree_fail(self,type):
         ''' count number of matches that agree on not passing filters given variant type '''
-        pass
+        return reduce(lambda x, y: x+(y.has_pass()==False), self.vartype[type], 0)
 
     def count_disagree_pass(self,type):
        ''' count number of matches where one call passed and the other did not given variant type '''
-       pass
+       return reduce(lambda x, y: x+(y.both_pass()*y.has_pass()), self.vartype[type], 0)
 
     def sum_scores(self,type):
         ''' return sum of all scores for variant type '''
@@ -126,6 +126,9 @@ class Variant:
 
     def has_somatic(self):
         ''' return True if either call is somatic '''
+        if not self.matched():
+            return False
+
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
         if 'Somatic' in ss:
             return True
@@ -133,6 +136,9 @@ class Variant:
 
     def agree_somatic(self):
         ''' return True if both calls are somatic '''
+        if not self.matched():
+            return False
+
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
         if 'Germline' in ss and 'Somatic' in ss:
             return False
@@ -140,12 +146,20 @@ class Variant:
 
     def has_pass(self):
         ''' return True if either filter is PASS '''
+        if not self.matched():
+            if not self.recA.FILTER:
+                return True
+            return False
+
         if not self.recA.FILTER or not self.recB.FILTER:
             return True
         return False
 
     def both_pass(self):
         ''' return True if both filters are PASS '''
+        if not self.matched():
+            return False
+
         if not self.recA.FILTER and not self.recB.FILTER:
             return True
         return False

@@ -35,6 +35,18 @@ class testVCFcomparator(unittest.TestCase):
         self.assertTrue(self.matchedPFSNV.has_pass())
         self.assertFalse(self.matchedPFSNV.both_pass())
 
+    def testCountPassAgree(self):
+        p = self.comparison.count_agree_pass('SNV')
+        self.assertGreater(p,0.0)
+
+    def testCountFailAgree(self):
+        p = self.comparison.count_agree_fail('SNV')
+        self.assertEqual(p,0.0)
+
+    def testCountPassDisagree(self):
+        p = self.comparison.count_disagree_pass('SNV')
+        self.assertGreater(p,0.0)
+
     ## SV tests ##
 
     def testComparisonMatchedSV(self):
