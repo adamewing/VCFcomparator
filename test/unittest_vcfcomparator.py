@@ -9,7 +9,7 @@ class testVCFcomparator(unittest.TestCase):
         self.vcf_handles = vc.openVCFs(self.vcf_list)
         self.comparison = vc.compareVCFs(self.vcf_handles[0], self.vcf_handles[1])
         self.matchedSNV = self.comparison.vartype['SNV'][0]
-        self.matchedPFSNV = self.comparison.vartype['SNV'][1] # disagreement on filter
+        self.matchedPFSNV = self.comparison.vartype['SNV'][1] # disagreement on filter and somatic
         self.unmatchedSNV = self.comparison.vartype['SNV'][2]
         self.matchedSV  = self.comparison.vartype['SV'][0]
         self.overlapSV = self.comparison.vartype['SV'][1]
@@ -45,6 +45,14 @@ class testVCFcomparator(unittest.TestCase):
 
     def testCountPassDisagree(self):
         p = self.comparison.count_disagree_pass('SNV')
+        self.assertGreater(p,0.0)
+
+    def testCountSomaticAgree(self):
+        p = self.comparison.count_agree_somatic('SNV')
+        self.assertGreater(p,0.0)
+
+    def testCountSomaticDisagree(self):
+        p = self.comparison.count_disagree_somatic('SNV')
         self.assertGreater(p,0.0)
 
     ## SV tests ##

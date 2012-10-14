@@ -41,11 +41,11 @@ class Comparison:
 
     def count_agree_somatic(self,type):
         ''' count number of matches that agree on somatic status given variant type '''
-        pass
+        return reduce(lambda x, y: x+y.both_somatic(), self.vartype[type], 0)
 
     def count_disagree_somatic(self,type):
         ''' count number of matches that disagree on somatic status given variant type '''
-        pass
+        return reduce(lambda x, y: x+(y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[type], 0)
 
     def count_agree_pass(self,type):
         ''' count number of matches that agree on passing filters given variant type'''
@@ -57,7 +57,7 @@ class Comparison:
 
     def count_disagree_pass(self,type):
        ''' count number of matches where one call passed and the other did not given variant type '''
-       return reduce(lambda x, y: x+(y.both_pass()*y.has_pass()), self.vartype[type], 0)
+       return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[type], 0)
 
     def sum_scores(self,type):
         ''' return sum of all scores for variant type '''
@@ -127,6 +127,8 @@ class Variant:
     def has_somatic(self):
         ''' return True if either call is somatic '''
         if not self.matched():
+            if self.recA.INFO.get('SS') == 'Somatic':
+                return True
             return False
 
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
@@ -134,7 +136,7 @@ class Variant:
             return True
         return False
 
-    def agree_somatic(self):
+    def both_somatic(self):
         ''' return True if both calls are somatic '''
         if not self.matched():
             return False
