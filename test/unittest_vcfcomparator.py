@@ -57,7 +57,6 @@ class testVCFcomparator(unittest.TestCase):
 
     def testSummarySumScores(self):
         s = self.comparison.sum_scores('SNV')
-        print "sum_score:",s
         self.assertGreater(s,0.0)
 
     ## SV tests ##

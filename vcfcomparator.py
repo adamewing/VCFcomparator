@@ -27,10 +27,6 @@ class Comparison:
         self.vartype['CNV']   = []
         self.vartype['SV']    = []
 
-    def summary(self):
-        for type in self.vartype.keys():
-            print type, self.matched(type), "of", len(self.vartype[type]), "alt", self.altmatched(type)
-
     def matched(self, type):
         ''' count number of matched variants of <type> '''
         return reduce(lambda x, y: x+y.matched(), self.vartype[type], 0)
@@ -79,8 +75,8 @@ class Variant:
     def interval_score(self, density=False):
         ''' scoring function for intervals, based on amount of overlap '''
         # get pos,end +/- confidence intervals if present
-        iv_a = self.get_conf_interval(self.recA)
-        iv_b = self.get_conf_interval(self.recB)
+        iv_a = get_conf_interval(self.recA)
+        iv_b = get_conf_interval(self.recB)
 
         ol_coords = get_overlap_coords(iv_a, iv_b)
         ol_width = ol_coords[1] - ol_coords[0]
@@ -103,21 +99,6 @@ class Variant:
             s = s * den_a * den_b
 
         return s
-
-    def get_conf_interval(self,rec):
-        ''' return confidence interval as (start-ci, end+ci)'''
-        cipos = ciend = 0
-        
-        if 'CIPOS' in rec.INFO:
-            cipos = abs(min(rec.INFO.get('CIPOS')))
-        if 'CIEND' in rec.INFO:
-            ciend = abs(max(rec.INFO.get('CIEND')))
-
-        end = rec.INFO.get('END')   
-        if not end:
-            end = rec.POS
-
-        return rec.POS-cipos, end+ciend
 
     def matched(self):
         if self.recA and self.recB:
@@ -200,6 +181,21 @@ class CNV (Variant):
 
 ## functions ##
 
+def get_conf_interval(rec):
+    ''' return confidence interval as (start-ci, end+ci)'''
+    cipos = ciend = 0
+    
+    if 'CIPOS' in rec.INFO:
+        cipos = abs(min(rec.INFO.get('CIPOS')))
+    if 'CIEND' in rec.INFO:
+        ciend = abs(max(rec.INFO.get('CIEND')))
+
+    end = rec.INFO.get('END')   
+    if not end:
+        end = rec.POS
+
+    return rec.POS-cipos, end+ciend
+
 def get_overlap_coords(iv_a, iv_b):
     ''' return start and end coordinates of overlap between iv_a and iv_b
         return 0,0 if no overlap
@@ -251,10 +247,21 @@ def vcfVariantMatch(recA, recB):
     if recA.is_sv and recB.is_sv and recA.INFO.get('SVTYPE') == recB.INFO.get('SVTYPE') == 'BND': 
         orientA = orientSV(str(recA.ALT[0]))
         orientB = orientSV(str(recB.ALT[0]))
-        if orientA == orientB:
+        if orientA == orientB and vcfIntervalMatch(recA, recB):
             return True
 
     return False 
+
+def vcfIntervalMatch(recA, recB):
+    ''' match SV/CNV intervals using POS/END/CIPOS/CIEND '''
+    assert recA.INFO.get('SVTYPE') == recB.INFO.get('SVTYPE')
+
+    iv_A = get_conf_interval(recA)
+    iv_B = get_conf_interval(recB)
+
+    if sum(get_overlap_coords(iv_A, iv_B)) > 0.0:
+        return True
+    return False
 
 def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
@@ -281,9 +288,16 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
             w = w_indel
 
         elif recA.is_sv and recA.INFO.get('SVTYPE') == 'BND':
-            type = 'SV'
-            variant = SV(recA, None)
-            w = w_sv
+            try:
+                assert recA.INFO.has_key('END')
+                assert recA.INFO.get('END') > recA.POS
+                type = 'SV'
+                variant = SV(recA, None)
+                w = w_sv
+            except AssertionError:
+                sys.stderr.write("please check SV INFO, END must be greater than POS, record:" + str(recA) + "\n")
+
+        # TODO: CNV (need test data)
 
         if type: # only compare known variant types
             for recB in h_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
@@ -321,6 +335,14 @@ def orientSV(alt):
 
     return orient
 
+def summary(compAB, compBA):
+    ''' given A --> B comparison and B --> A comparison, output summary stats '''
+    for type in compAB.vartype.keys():
+        assert compBA.vartype.has_key(type)
+
+        print "A-->B", type, compAB.matched(type), "of", len(compAB.vartype[type]), "alt", compAB.altmatched(type)
+        print "B-->A", type, compBA.matched(type), "of", len(compBA.vartype[type]), "alt", compBA.altmatched(type)
+
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
     vcf_handles = []
@@ -335,8 +357,7 @@ def openVCFs(vcf_list):
     return vcf_handles
 
 def parseVCFs(vcf_list, maskfile=None):
-    ''' handle the list of vcf files
-        handle errors '''
+    ''' handle the list of vcf files and handle errors '''
 
     vcf_handles = openVCFs(vcf_list) 
 
@@ -347,7 +368,7 @@ def parseVCFs(vcf_list, maskfile=None):
         else:
             for i in range(len(vcf_handles[0].metadata['SAMPLE'])):
                 if vcf_handles[0].metadata['SAMPLE'][i]['Individual'] != vcf_handles[1].metadata['SAMPLE'][i]['Individual']:
-                    sys.stderr.write("warning: comparing two different individuals: " +
+                    sys.stderr.write("comparing two _different_ individuals, if this is not expected please correct Individual metadata in VCF: " +
                                      vcf_handles[0].metadata['SAMPLE'][i]['Individual'] + " " +
                                      vcf_handles[1].metadata['SAMPLE'][i]['Individual'] + "\n")
                     break
@@ -358,14 +379,16 @@ def parseVCFs(vcf_list, maskfile=None):
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        result01 = compareVCFs(vcf_handles[0], vcf_handles[1])
-        result01.summary()
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1])
 
+        # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        result10 = compareVCFs(vcf_handles[1], vcf_handles[0])
-        result10.summary()
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0])
+
+        # output
+        summary(resultAB, resultBA)
 
     except ValueError as e:
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
