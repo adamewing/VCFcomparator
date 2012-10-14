@@ -2,8 +2,8 @@
 
 '''
 VCF comparator: compares mutation calls in VCF formatted files
-(c) 2012 Adam Ewing (ewingad at soe.ucsc.edu)
-see LICENSE.txt for licensing inforomation
+Distributed under MIT license, see LICENSE.txt
+Contact: Adam Ewing (ewingad@soe.ucsc.edu)
 '''
 
 import vcf
@@ -12,8 +12,17 @@ import gzip
 import sys
 from re import search
 from os.path import exists
-from scipy.stats import norm
 from numpy import interp
+
+# scipy.stats can be difficult to install properly
+_with_scipy = True
+try:
+    from scipy.stats import norm
+except ImportError as e:
+    sys.stderr.write("\n***\nCould not load scipy.stats: " + str(e) + 
+                     "\nPlease ensure LAPACK and BLAS/ATLAS were compiled properly and re-install scipy" +
+                     "\nVCFcomparator may still be used without the -w/--weight_intervals option\n***\n")
+    _with_scipy = False
 
 ## classes ##
 
@@ -400,6 +409,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
-    parser.add_argument('-w', '--weight_intervals', dest='weight_intervals', action='store_true', default=False)
+    parser.add_argument('-w', '--weight_intervals', dest='weight_intervals', action='store_true', default=False,
+                        help='apply a normally-distributed weight to interval match scores')
     args = parser.parse_args()
+    if not _with_scipy:
+        sys.stderr.write("** -w/--weight_intervals overridden (set False) as scipy.stats could not be loaded\n")
+        args.weight_intervals = False
     main(args)
