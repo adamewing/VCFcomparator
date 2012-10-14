@@ -81,6 +81,13 @@ class Variant:
     def __str__(self):
         return str(self.recA) + "\t" + str(self.recB)
 
+    def set_left(self, vcf_recB):
+        ''' sets record B only if it is not already set '''
+        if not self.recB:
+            self.recB = vcf_recB
+            return True
+        return False
+
     def interval_score(self, density=False):
         ''' scoring function for intervals, based on amount of overlap '''
         # get pos,end +/- confidence intervals if present
@@ -258,7 +265,6 @@ def vcfVariantMatch(recA, recB):
         orientB = orientSV(str(recB.ALT[0]))
         if orientA == orientB and vcfIntervalMatch(recA, recB):
             return True
-
     return False 
 
 def vcfIntervalMatch(recA, recB):
@@ -277,6 +283,8 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
     cmp = Comparison()
+    # keep match symmetric by adding B records already seen to altmatch (intervals only)
+    used_B_interval = {}
 
     for recA in h_vcfA:
         if mask:
@@ -314,11 +322,23 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
                     if match: # handle one-to-many matches
                         variant.altmatch.append(recB)
                     else:
-                        variant.recB = recB
-                        match = True
-            cmp.vartype[type].append(variant)
+                        assert variant.recB is None
 
+                        # special case for intervals
+                        if type in ('INDEL','SV','CNV') and sv_uid(recB) in used_B_interval:
+                            variant.altmatch.append(recB)
+
+                        elif variant.set_left(recB):
+                            used_B_interval[sv_uid(recB)] = recA
+                            match = True
+
+            cmp.vartype[type].append(variant)
     return cmp
+
+def sv_uid(rec):
+    ''' makes a (hopefully) unique id for an SV record '''
+    fields = (rec.CHROM,rec.POS,rec.ID,rec.REF,rec.ALT,rec.QUAL,rec.FILTER,rec.INFO)
+    return ','.join(map(str,fields))
 
 def orientSV(alt):
     '''
