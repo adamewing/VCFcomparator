@@ -203,8 +203,8 @@ class CNV (Variant):
 
 ## functions ##
 
-def get_conf_interval(rec):
-    ''' return confidence interval as (start-ci, end+ci)'''
+def get_conf_interval(rec, w_indel=50):
+    ''' return confidence interval as (start-ci, end+ci), if rec is an indel, w_indel is added to interval'''
     cipos = ciend = 0
     
     if 'CIPOS' in rec.INFO:
@@ -212,9 +212,13 @@ def get_conf_interval(rec):
     if 'CIEND' in rec.INFO:
         ciend = abs(max(rec.INFO.get('CIEND')))
 
-    end = rec.INFO.get('END')[0] 
-    if not end:
-        end = rec.POS
+    end = rec.POS
+    if 'END' in rec.INFO:
+        end = rec.INFO.get('END')[0] 
+
+    if rec.is_indel:
+        cipos += w_indel 
+        ciend += w_indel
 
     return rec.POS-cipos, end+ciend
 
