@@ -183,17 +183,23 @@ class INDEL (Variant):
     def type(self):
         pass
     def score(self, density=False):
-        return self.interval_score(density)
+        if self.matched():
+            return self.interval_score(density)
+        return 0.0
 
 class SV (Variant):
     ''' structural variant subclass '''
     def score(self, density=False):
-        return self.interval_score(density)
+        if self.matched():
+            return self.interval_score(density)
+        return 0.0
 
 class CNV (Variant):
     ''' copy number variant subclass '''
     def score(self, density=False):
-        return self.interval_score(density)
+        if self.matched():
+            return self.interval_score(density)
+        return 0.0
 
 ## functions ##
 
@@ -206,7 +212,7 @@ def get_conf_interval(rec):
     if 'CIEND' in rec.INFO:
         ciend = abs(max(rec.INFO.get('CIEND')))
 
-    end = rec.INFO.get('END')   
+    end = rec.INFO.get('END')[0] 
     if not end:
         end = rec.POS
 
