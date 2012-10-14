@@ -9,6 +9,7 @@ class testVCFcomparator(unittest.TestCase):
         self.vcf_handles = vc.openVCFs(self.vcf_list)
         self.comparison = vc.compareVCFs(self.vcf_handles[0], self.vcf_handles[1])
         self.matchedSNV = self.comparison.vartype['SNV'][0]
+        self.unmatchedSNV = self.comparison.vartype['SNV'][2]
         self.matchedSV  = self.comparison.vartype['SV'][0]
         self.overlapSV = self.comparison.vartype['SV'][1]
 
@@ -23,6 +24,9 @@ class testVCFcomparator(unittest.TestCase):
 
     def testMatchedSNVMatched(self):
         self.assertTrue(self.matchedSNV.matched())
+
+    def testMatchedSNVUnmatched(self):
+        self.assertFalse(self.unmatchedSNV.matched())
 
     def testMatchedSNVScore(self):
         self.assertEqual(self.matchedSNV.score(), 1.0)

@@ -40,21 +40,27 @@ class Comparison:
         return reduce(lambda x, y: x+len(y.altmatch), self.vartype[type], 0)
 
     def count_agree_somatic(self,type):
+        ''' count number of matches that agree on somatic status given variant type '''
         pass
 
     def count_disagree_somatic(self,type):
+        ''' count number of matches that disagree on somatic status given variant type '''
         pass
 
     def count_agree_pass(self,type):
+        ''' count number of matches that agree on passing filters given variant type'''
         pass
 
     def count_agree_fail(self,type):
+        ''' count number of matches that agree on not passing filters given variant type '''
         pass
 
     def count_disagree_pass(self,type):
-        pass
+       ''' count number of matches where one call passed and the other did not given variant type '''
+       pass
 
     def sum_scores(self,type):
+        ''' return sum of all scores for variant type '''
         pass
 
 class Variant:
