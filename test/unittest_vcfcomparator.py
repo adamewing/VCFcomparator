@@ -9,18 +9,15 @@ class testVCFcomparator(unittest.TestCase):
         self.vcf_handles = vc.openVCFs(self.vcf_list)
         self.comparison = vc.compareVCFs(self.vcf_handles[0], self.vcf_handles[1])
         self.matchedSNV = self.comparison.vartype['SNV'][0]
+        self.matchedPFSNV = self.comparison.vartype['SNV'][1] # disagreement on filter
         self.unmatchedSNV = self.comparison.vartype['SNV'][2]
         self.matchedSV  = self.comparison.vartype['SV'][0]
         self.overlapSV = self.comparison.vartype['SV'][1]
 
+    ## SNV tests ##
+
     def testComparisonMatchedSNV(self):
         self.assertEqual(self.comparison.matched('SNV'), 2)
-
-    def testComparisonMatchedSV(self):
-        self.assertEqual(self.comparison.matched('SV'),2)
-
-    def testComparisonAltMatchedSV(self):
-        self.assertEqual(self.comparison.altmatched('SV'),1)
 
     def testMatchedSNVMatched(self):
         self.assertTrue(self.matchedSNV.matched())
@@ -30,6 +27,21 @@ class testVCFcomparator(unittest.TestCase):
 
     def testMatchedSNVScore(self):
         self.assertEqual(self.matchedSNV.score(), 1.0)
+
+    def testMatchedPPSNV(self): # both SNVs pass filter
+        self.assertTrue(self.matchedSNV.both_pass())
+
+    def testMatchedPFSNV(self): # one pass SNV filter
+        self.assertTrue(self.matchedPFSNV.has_pass())
+        self.assertFalse(self.matchedPFSNV.both_pass())
+
+    ## SV tests ##
+
+    def testComparisonMatchedSV(self):
+        self.assertEqual(self.comparison.matched('SV'),2)
+
+    def testComparisonAltMatchedSV(self):
+        self.assertEqual(self.comparison.altmatched('SV'),1)
 
     def testMatchedSVMatched(self):
         self.assertTrue(self.matchedSV.matched())

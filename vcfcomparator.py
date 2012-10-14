@@ -126,27 +126,27 @@ class Variant:
 
     def has_somatic(self):
         ''' return True if either call is somatic '''
-        ss = [recA.INFO.get('SS'), recB.INFO.get('SS')]
+        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
         if 'Somatic' in ss:
             return True
         return False
 
     def agree_somatic(self):
         ''' return True if both calls are somatic '''
-        ss = [recA.INFO.get('SS'), recB.INFO.get('SS')]
+        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
         if 'Germline' in ss and 'Somatic' in ss:
             return False
         return True
 
     def has_pass(self):
         ''' return True if either filter is PASS '''
-        if not recA.FILTER or not recB.FILTER:
+        if not self.recA.FILTER or not self.recB.FILTER:
             return True
         return False
 
     def both_pass(self):
         ''' return True if both filters are PASS '''
-        if not recA.FILTER and not recB.FILTER:
+        if not self.recA.FILTER and not self.recB.FILTER:
             return True
         return False
 
