@@ -55,7 +55,7 @@ class testVCFcomparator(unittest.TestCase):
         p = self.comparison.count_disagree_somatic('SNV')
         self.assertGreater(p,0.0)
 
-    def testSummarySumScores(self):
+    def testSNVSummarySumScores(self):
         s = self.comparison.sum_scores('SNV')
         self.assertGreater(s,0.0)
 
@@ -82,6 +82,13 @@ class testVCFcomparator(unittest.TestCase):
 
         # turning density on should decrease the score for a partial overlap
         self.assertLess(self.overlapSV.score(density=True),self.overlapSV.score(density=False))
+
+    def testSVSummarySumScores(self):
+        s_w = self.comparison.sum_scores('SV', weight=True)
+        s_uw = self.comparison.sum_scores('SV', weight=False)
+        self.assertGreater(s_w,0.0)
+        self.assertGreater(s_uw,0.0)
+        self.assertFalse(s_uw == s_w)
 
 if __name__ == '__main__':
     unittest.main()

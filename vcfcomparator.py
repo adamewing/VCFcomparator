@@ -55,9 +55,9 @@ class Comparison:
        ''' count number of matches where one call passed and the other did not given variant type '''
        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[type], 0)
 
-    def sum_scores(self,type):
+    def sum_scores(self,type, weight=False):
         ''' return sum of all scores for variant type '''
-        return reduce(lambda x, y: x+y.score(), self.vartype[type], 0.0)
+        return reduce(lambda x, y: x+y.score(weight), self.vartype[type], 0.0)
 
 class Variant:
     ''' base class for variant types 
@@ -156,7 +156,7 @@ class SNV (Variant):
         else:
             return 'transversion'
 
-    def score(self):
+    def score(self, density=False):
         if self.matched():
             return 1.0
         return 0.0
@@ -335,13 +335,13 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB, compBA):
+def summary(compAB, compBA, weight=False):
     ''' given A --> B comparison and B --> A comparison, output summary stats '''
     for type in compAB.vartype.keys():
         assert compBA.vartype.has_key(type)
 
-        print "A-->B", type, compAB.matched(type), "of", len(compAB.vartype[type]), "alt", compAB.altmatched(type)
-        print "B-->A", type, compBA.matched(type), "of", len(compBA.vartype[type]), "alt", compBA.altmatched(type)
+        print "A-->B", type, compAB.matched(type), "of", len(compAB.vartype[type]), "alt", compAB.altmatched(type), "score", compAB.sum_scores(type, weight)
+        print "B-->A", type, compBA.matched(type), "of", len(compBA.vartype[type]), "alt", compBA.altmatched(type), "score", compAB.sum_scores(type, weight)
 
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
@@ -356,7 +356,7 @@ def openVCFs(vcf_list):
 
     return vcf_handles
 
-def parseVCFs(vcf_list, maskfile=None):
+def parseVCFs(vcf_list, maskfile=None, weight=False):
     ''' handle the list of vcf files and handle errors '''
 
     vcf_handles = openVCFs(vcf_list) 
@@ -388,17 +388,18 @@ def parseVCFs(vcf_list, maskfile=None):
         resultBA = compareVCFs(vcf_handles[1], vcf_handles[0])
 
         # output
-        summary(resultAB, resultBA)
+        summary(resultAB, resultBA, weight=weight)
 
     except ValueError as e:
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
 
 def main(args):
-    parseVCFs(args.vcf)
+    parseVCFs(args.vcf, maskfile=args.maskfile, weight=args.weight_intervals)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
+    parser.add_argument('-w', '--weight_intervals', dest='weight_intervals', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
