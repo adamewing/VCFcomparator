@@ -61,7 +61,7 @@ class Comparison:
 
     def sum_scores(self,type):
         ''' return sum of all scores for variant type '''
-        pass
+        return reduce(lambda x, y: x+y.score(), self.vartype[type], 0.0)
 
 class Variant:
     ''' base class for variant types 
