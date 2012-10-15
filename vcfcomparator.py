@@ -36,37 +36,37 @@ class Comparison:
         self.vartype['CNV']   = []
         self.vartype['SV']    = []
 
-    def matched(self, type):
-        ''' count number of matched variants of <type> '''
-        return reduce(lambda x, y: x+y.matched(), self.vartype[type], 0)
+    def matched(self, vtype):
+        ''' count number of matched variants of <vtype> '''
+        return reduce(lambda x, y: x+y.matched(), self.vartype[vtype], 0)
 
-    def altmatched(self,type):
+    def altmatched(self,vtype):
         ''' count number of alternate matches '''
-        return reduce(lambda x, y: x+len(y.altmatch), self.vartype[type], 0)
+        return reduce(lambda x, y: x+len(y.altmatch), self.vartype[vtype], 0)
 
-    def count_agree_somatic(self,type):
+    def count_agree_somatic(self,vtype):
         ''' count number of matches that agree on somatic status given variant type '''
-        return reduce(lambda x, y: x+y.both_somatic(), self.vartype[type], 0)
+        return reduce(lambda x, y: x+y.both_somatic(), self.vartype[vtype], 0)
 
-    def count_disagree_somatic(self,type):
+    def count_disagree_somatic(self,vtype):
         ''' count number of matches that disagree on somatic status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[type], 0)
+        return reduce(lambda x, y: x+(y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
 
-    def count_agree_pass(self,type):
+    def count_agree_pass(self,vtype):
         ''' count number of matches that agree on passing filters given variant type'''
-        return reduce(lambda x, y: x+y.both_pass(), self.vartype[type], 0)
+        return reduce(lambda x, y: x+y.both_pass(), self.vartype[vtype], 0)
 
-    def count_agree_fail(self,type):
+    def count_agree_fail(self,vtype):
         ''' count number of matches that agree on not passing filters given variant type '''
-        return reduce(lambda x, y: x+(y.has_pass()==False), self.vartype[type], 0)
+        return reduce(lambda x, y: x+(y.has_pass()==False), self.vartype[vtype], 0)
 
-    def count_disagree_pass(self,type):
+    def count_disagree_pass(self,vtype):
        ''' count number of matches where one call passed and the other did not given variant type '''
-       return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[type], 0)
+       return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[vtype], 0)
 
-    def sum_scores(self,type, weight=False):
+    def sum_scores(self,vtype, weight=False):
         ''' return sum of all scores for variant type '''
-        return reduce(lambda x, y: x+y.score(weight), self.vartype[type], 0.0)
+        return reduce(lambda x, y: x+y.score(weight), self.vartype[vtype], 0.0)
 
 class Variant:
     ''' base class for variant types 
@@ -166,7 +166,7 @@ class Variant:
 
 class SNV (Variant):
     ''' single nucleotide variant subclass '''
-    def type(self):
+    def vtype(self):
         if self.is_transition:
             return 'transition'
         else:
@@ -180,7 +180,7 @@ class SNV (Variant):
 
 class INDEL (Variant):
     ''' short insertion/deletion subclass '''
-    def type(self):
+    def vtype(self):
         pass
     def score(self, density=False):
         if self.matched():
@@ -213,8 +213,11 @@ def get_conf_interval(rec, w_indel=50):
         ciend = abs(max(rec.INFO.get('CIEND')))
 
     end = rec.POS
-    if 'END' in rec.INFO:
-        end = rec.INFO.get('END')[0] 
+    try:
+        if 'END' in rec.INFO:
+            end = rec.INFO.get('END')[0]
+    except TypeError:
+        end = rec.INFO.get('END')
 
     if rec.is_indel:
         cipos += w_indel 
@@ -301,16 +304,16 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
             pass # FIXME not implemented
 
         match = False
-        type = None
+        vtype = None
         variant = None
         w = 0
 
         if recA.is_snp:
-            type = 'SNV'
+            vtype = 'SNV'
             variant = SNV(recA, None)
 
         elif recA.is_indel:
-            type = 'INDEL'
+            vtype = 'INDEL'
             variant = INDEL(recA, None)
             w = w_indel
 
@@ -318,7 +321,7 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
             try:
                 assert recA.INFO.has_key('END')
                 assert recA.INFO.get('END') > recA.POS
-                type = 'SV'
+                vtype = 'SV'
                 variant = SV(recA, None)
                 w = w_sv
             except AssertionError:
@@ -326,7 +329,7 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
 
         # TODO: CNV (need test data)
 
-        if type: # only compare known variant types
+        if vtype: # only compare known variant types
             for recB in h_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
                 if vcfVariantMatch(recA, recB):
                     if match: # handle one-to-many matches
@@ -335,14 +338,14 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
                         assert variant.recB is None
 
                         # special case for intervals
-                        if type in ('INDEL','SV','CNV') and sv_uid(recB) in used_B_interval:
+                        if vtype in ('INDEL','SV','CNV') and sv_uid(recB) in used_B_interval:
                             variant.altmatch.append(recB)
 
                         elif variant.set_left(recB):
                             used_B_interval[sv_uid(recB)] = recA
                             match = True
 
-            cmp.vartype[type].append(variant)
+            cmp.vartype[vtype].append(variant)
     return cmp
 
 def sv_uid(rec):
@@ -374,13 +377,46 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB, compBA, weight=False):
-    ''' given A --> B comparison and B --> A comparison, output summary stats '''
-    for type in compAB.vartype.keys():
-        assert compBA.vartype.has_key(type)
+def summary(compAB, compBA, weight=False, outfile=None):
+    ''' given A --> B comparison and B --> A comparison, output summary stats 
+        to outfile, or to stdout if outfile=None'''
 
-        print "A-->B", type, compAB.matched(type), "of", len(compAB.vartype[type]), "alt", compAB.altmatched(type), "score", compAB.sum_scores(type, weight)
-        print "B-->A", type, compBA.matched(type), "of", len(compBA.vartype[type]), "alt", compBA.altmatched(type), "score", compAB.sum_scores(type, weight)
+    out = []
+    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','sum_score')))
+
+    for vtype in compAB.vartype.keys():
+        assert compBA.vartype.has_key(vtype)
+
+        #print "A-->B", vtype, compAB.matched(vtype), "of", len(compAB.vartype[vtype]), "alt", compAB.altmatched(vtype), "score", compAB.sum_scores(vtype, weight)
+        #print "B-->A", vtype, compBA.matched(vtype), "of", len(compBA.vartype[vtype]), "alt", compBA.altmatched(vtype), "score", compAB.sum_scores(vtype, weight)
+    
+
+        n_A = len(compAB.vartype[vtype])
+        n_B = len(compBA.vartype[vtype])
+        n_shared_AB = compAB.matched(vtype)
+        n_shared_BA = compBA.matched(vtype)
+
+        if n_shared_AB != n_shared_BA:
+            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + 
+                             str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
+                             ") using A-->B\n")
+
+        n_shared = n_shared_AB
+        n_only_A = n_A - n_shared
+        n_only_B = n_B - n_shared
+        n_alt_A  = compAB.altmatched(vtype)
+        n_alt_B  = compBA.altmatched(vtype)
+        s_score  = compAB.sum_scores(vtype,weight=weight)
+        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, s_score))
+
+        out.append('\t'.join(outstr))
+
+    f = sys.stdout
+    if outfile:
+        f = open(outfile, 'w')
+    f.write('\n'.join(out) + "\n")
+    if outfile:
+        f.close()
 
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
