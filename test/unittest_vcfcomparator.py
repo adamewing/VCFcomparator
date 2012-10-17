@@ -8,11 +8,19 @@ class testVCFcomparator(unittest.TestCase):
         self.vcf_list = ['test_data/test_A.vcf.gz','test_data/test_B.vcf.gz']
         self.vcf_handles = vc.openVCFs(self.vcf_list)
         self.comparison = vc.compareVCFs(self.vcf_handles[0], self.vcf_handles[1])
+
         self.matchedSNV = self.comparison.vartype['SNV'][0]
         self.matchedPFSNV = self.comparison.vartype['SNV'][1] # disagreement on filter and somatic
         self.unmatchedSNV = self.comparison.vartype['SNV'][2]
+
+        self.matchedINDEL = self.comparison.vartype['INDEL'][0]
+        self.unmatchedINDEL = self.comparison.vartype['INDEL'][1]
+
         self.matchedSV  = self.comparison.vartype['SV'][0]
         self.overlapSV = self.comparison.vartype['SV'][1]
+
+#        self.overlapCNV = self.comparison.vartype['CNV'][0]
+#        self.unmatchedCNV = self.comparison.vartype['CNV'][1]
 
     ## SNV tests ##
 
@@ -59,6 +67,8 @@ class testVCFcomparator(unittest.TestCase):
         s = self.comparison.sum_scores('SNV')
         self.assertGreater(s,0.0)
 
+    ## INDEL tests ##
+
     ## SV tests ##
 
     def testComparisonMatchedSV(self):
@@ -82,6 +92,8 @@ class testVCFcomparator(unittest.TestCase):
 
         # turning density on should decrease the score for a partial overlap
         self.assertLess(self.overlapSV.score(density=True),self.overlapSV.score(density=False))
+
+    ## CNV tests ##
 
     def testSVSummarySumScores(self):
         s_w = self.comparison.sum_scores('SV', weight=True)

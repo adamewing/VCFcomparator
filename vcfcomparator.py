@@ -10,7 +10,7 @@ import vcf
 import argparse
 import gzip
 import sys
-from re import search
+from re import search, sub
 from os.path import exists
 from numpy import interp
 
@@ -387,10 +387,6 @@ def summary(compAB, compBA, weight=False, outfile=None):
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
 
-        #print "A-->B", vtype, compAB.matched(vtype), "of", len(compAB.vartype[vtype]), "alt", compAB.altmatched(vtype), "score", compAB.sum_scores(vtype, weight)
-        #print "B-->A", vtype, compBA.matched(vtype), "of", len(compBA.vartype[vtype]), "alt", compBA.altmatched(vtype), "score", compAB.sum_scores(vtype, weight)
-    
-
         n_A = len(compAB.vartype[vtype])
         n_B = len(compBA.vartype[vtype])
         n_shared_AB = compAB.matched(vtype)
@@ -418,6 +414,37 @@ def summary(compAB, compBA, weight=False, outfile=None):
     if outfile:
         f.close()
 
+def outputVCF(comparison, inVCFhandle):
+    ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A'''
+    ifname = inVCFhandle.filename
+    assert ifname.endswith('.vcf.gz')
+
+    ofname = sub('vcf.gz$', 'matched.vcf', ifname)
+    vcfout_match   = vcf.Writer(file(ofname, 'w'), inVCFhandle)
+
+    ofname = sub('vcf.gz$', 'unmatched.vcf', ifname)
+    vcfout_unmatch = vcf.Writer(file(ofname, 'w'), inVCFhandle)
+
+    vars = {}
+    for vtype in comparison.vartype.keys():
+        for var in comparison.vartype[vtype]:
+            f_loc = float(var.recA.POS)
+
+            # make sure key is unique
+            while f_loc in vars:
+                f_loc += 0.001 # hopefully there aren't 1000 records with the same POS...
+            vars[f_loc] = var
+
+    vkeys = vars.keys()
+    vkeys.sort()
+
+    # write VCF records for matched and unmatched variants
+    for key in vkeys:
+        if vars[key].matched():
+            vcfout_match.write_record(vars[key].recA)
+        else:
+            vcfout_unmatch.write_record(vars[key].recA)
+
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
     vcf_handles = []
@@ -433,8 +460,9 @@ def openVCFs(vcf_list):
 
 def parseVCFs(vcf_list, maskfile=None, weight=False):
     ''' handle the list of vcf files and handle errors '''
-
+    assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
+    assert len(vcf_handles) == 2
 
     # give some warnings if the comparison is between different samples
     try:
@@ -464,6 +492,8 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
 
         # output
         summary(resultAB, resultBA, weight=weight)
+        outputVCF(resultAB, vcf_handles[0]) 
+        outputVCF(resultBA, vcf_handles[1])
 
     except ValueError as e:
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
@@ -477,6 +507,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
     parser.add_argument('-w', '--weight_intervals', dest='weight_intervals', action='store_true', default=False,
                         help='apply a normally-distributed weight to interval match scores')
+
     args = parser.parse_args()
     if not _with_scipy:
         sys.stderr.write("** -w/--weight_intervals overridden (set False) as scipy.stats could not be loaded\n")
