@@ -212,12 +212,22 @@ def get_conf_interval(rec, w_indel=50):
     if 'CIEND' in rec.INFO:
         ciend = abs(max(rec.INFO.get('CIEND')))
 
-    end = rec.POS
-    try:
-        if 'END' in rec.INFO:
+    # default to using POS+1 as end
+    end = rec.POS+1
+
+    # if 'END' is specified, use as end
+    if 'END' in rec.INFO:
+        try:
             end = rec.INFO.get('END')[0]
-    except TypeError:
-        end = rec.INFO.get('END')
+        except TypeError:
+            end = rec.INFO.get('END')
+
+    # if end position is defined on same chromosome in ALT
+    if rec.is_sv:
+        if len(rec.ALT) == 1:
+            if rec.CHROM == rec.ALT[0].chr:
+                end = rec.ALT[0].pos
+                assert end > rec.POS
 
     if rec.is_indel:
         cipos += w_indel 
@@ -318,14 +328,9 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
             w = w_indel
 
         elif recA.is_sv and recA.INFO.get('SVTYPE') == 'BND':
-            try:
-                assert recA.INFO.has_key('END')
-                assert recA.INFO.get('END') > recA.POS
-                vtype = 'SV'
-                variant = SV(recA, None)
-                w = w_sv
-            except AssertionError:
-                sys.stderr.write("please check SV INFO, END must be greater than POS, record:" + str(recA) + "\n")
+            vtype = 'SV'
+            variant = SV(recA, None)
+            w = w_sv
 
         # TODO: CNV (need test data)
 

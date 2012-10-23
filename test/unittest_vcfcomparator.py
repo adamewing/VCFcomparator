@@ -13,8 +13,8 @@ class testVCFcomparator(unittest.TestCase):
         self.matchedPFSNV = self.comparison.vartype['SNV'][1] # disagreement on filter and somatic
         self.unmatchedSNV = self.comparison.vartype['SNV'][2]
 
-        self.matchedINDEL = self.comparison.vartype['INDEL'][0]
-        self.unmatchedINDEL = self.comparison.vartype['INDEL'][1]
+#        self.matchedINDEL = self.comparison.vartype['INDEL'][0]
+#        self.unmatchedINDEL = self.comparison.vartype['INDEL'][1]
 
         self.matchedSV  = self.comparison.vartype['SV'][0]
         self.overlapSV = self.comparison.vartype['SV'][1]
