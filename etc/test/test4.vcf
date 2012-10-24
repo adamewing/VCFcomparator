@@ -1,0 +1,47 @@
+##fileformat=VCFv4.1
+##fileDate=20121009
+##center=UCSC
+##source="vcfcomparator test VCF"
+##reference=<ID=grch37-lite,source="ftp://ftp.ncbi.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh37/special_requests/GRCh37-lite.fa.gz">
+##phasing=none
+##INDIVIDUAL=TEST_A
+##SAMPLE=<ID=NORMAL,Individual="TEST_A",Description="Normal Sample",File="foo.bam",Platform="Illumina",Source="dbGaP">
+##SAMPLE=<ID=PRIMARY,Individual="TEST_A",Description="Primary Tumor",File="foo.bam",Platform="Illumina",Source="dbGaP">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS for imprecise variants">
+##INFO=<ID=CIEND,Number=2,Type=Integer,Description="Confidence interval around END for imprecise variants">
+##INFO=<ID=MQ,Number=1,Type=Integer,Description="RMS Mapping Quality">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variation">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="dbSNP membership, build 130">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total read depth for all samples">
+##INFO=<ID=DEL,Number=1,Type=Integer,Description="Deletion X bps away">
+##INFO=<ID=INS,Number=1,Type=Integer,Description="Insertion X bps away">
+##INFO=<ID=Gene,Number=1,Type=String,Description="Hugo Gene Symbol / UCSC Gene ID that overlaps variant">
+##INFO=<ID=VT,Number=1,Type=String,Description="Somatic variant type">
+##INFO=<ID=VC,Number=1,Type=String,Description="Somatic variant classification">
+##INFO=<ID=ProtCh,Number=1,Type=String,Description="Protein change due to somatic variant">
+##INFO=<ID=SS,Number=1,Type=String,Description="Somatic status of sample">
+##INFO=<ID=fa20,Number=0,Type=Flag,Description="Fraction of ALT below 20% of reads">
+##FILTER=<ID=q10,Description="Genotype Quality < 10">
+##FILTER=<ID=blq,Description="Position overlaps 1000 Genomes Project mapping quality blacklist">
+##FILTER=<ID=bldp,Description="Position overlap 1000 Genomes Project depth blacklist">
+##FILTER=<ID=ma,Description="Position in germline has 2+ support for 2+ alleles">
+##FILTER=<ID=idl10,Description="Position is within 10 bases of an indel">
+##FILTER=<ID=idls5,Description="Less than 5 reads supporting indel in appropriate tissue">
+##FILTER=<ID=pbias,Description="Positional bias, all reads supporting ALT are in first or last third of read">
+##FILTER=<ID=sbias,Description="Strand bias, majority of reads supporting ALT are on forward OR reverse strand">
+##FILTER=<ID=mc3,Description="Greater than 3 reads of somatic allele in germline">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=BQ,Number=.,Type=Float,Description="Avg base quality for reads supporting alleles 0/1/2/3">
+##FORMAT=<ID=MQ,Number=.,Type=Float,Description="Avg mapping quality for reads supporting alleles 0/1/2/3">
+##FORMAT=<ID=SB,Number=.,Type=Float,Description="Strand Bias for reads supporting alleles 0/1/2/3">
+##FORMAT=<ID=AD,Number=.,Type=Float,Description="Depth of reads supporting alleles 0/1/2/3">
+##FORMAT=<ID=FA,Number=1,Type=Float,Description="Fraction of reads supporting ALT">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number genotype for imprecise events">
+##ALT=<ID=CNV,Description="Copy number variable region">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NORMAL	PRIMARY
+11	99984160	BND_2947	A	]9:84326899]A	27	PASS	SVTYPE=BND;CIPOS=-125,125;CIEND=-125,125;DP=7;NS=2;MQ=27	GT:GQ:DP	./.:27:7	./.
+11	99984165	BND_2947	A	]9:84326904]A	27	PASS	SVTYPE=BND;CIPOS=-125,125;CIEND=-125,125;DP=7;NS=2;MQ=27	GT:GQ:DP	./.:27:7	./.
