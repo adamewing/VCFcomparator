@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+'''
+leftShiftBreakend.py
+
+Author: Adam Ewing (ewingad@soe.ucsc.edu)
+
+Implements left-shifting of precise breakends as described in the VCF 4.1 spec:
+http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41
+
+'''
+
+
 import pysam
 import vcf
 import sys
