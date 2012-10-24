@@ -127,7 +127,7 @@ def shift_bnd(rec, ref, verbose=False):
 
     return rec
 
-def main(args): # for testing
+def main(args): 
     ''' handle parameters, catch errors '''
 
     vcf_in  = None
@@ -143,6 +143,8 @@ def main(args): # for testing
     else:
         vcf_out = vcf.Writer(sys.stdout, template=vcf_in)
 
+    assert vcf_in and vcf_out
+
     ref = pysam.Fastafile(args.ref_fasta)
     for rec in vcf_in:
         if rec.is_sv:
@@ -153,7 +155,7 @@ def main(args): # for testing
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Shifts ambiguous breakends to their leftmost position')
+    parser = argparse.ArgumentParser(description='Shifts ambiguous precise breakends to their leftmost position')
     parser.add_argument(metavar='<vcf_file>', dest='vcf_infile', nargs=1, help='VCF file')
     parser.add_argument('-r', dest='ref_fasta', required=True, help='reference genome, .fasta indexed with samtools faidx')
     parser.add_argument('-o', dest='vcf_outfile', default=None, help='output VCF (default STDOUT)')
