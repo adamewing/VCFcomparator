@@ -48,6 +48,10 @@ class Comparison:
         ''' count number of matches that agree on somatic status given variant type '''
         return reduce(lambda x, y: x+y.both_somatic(), self.vartype[vtype], 0)
 
+    def count_agree_germline(self,vtype):
+        ''' count number of matches that agree on somatic status given variant type '''
+        return reduce(lambda x, y: x+y.both_germline(), self.vartype[vtype], 0)
+
     def count_disagree_somatic(self,vtype):
         ''' count number of matches that disagree on somatic status given variant type '''
         return reduce(lambda x, y: x+(y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
@@ -145,6 +149,22 @@ class Variant:
 
         # alternate way of reporting somatic
         if self.recA.INFO.get('SOMATIC') and self.recB.INFO.get('SOMATIC'):
+            return True
+
+        return False
+
+    def both_germline(self):
+        ''' return True if both calls are germline '''
+        if not self.matched():
+            return False
+
+        # preferred way to report somatics
+        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
+        if 'Germline' == ss[0] == ss[1]:
+            return True
+
+        # alternate way of reporting somatic
+        if self.recA.INFO.get('Germline') and self.recB.INFO.get('Germline'):
             return True
 
         return False
@@ -393,7 +413,7 @@ def summary(compAB, compBA, weight=False, outfile=None):
         to outfile, or to stdout if outfile=None'''
 
     out = []
-    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','agree_somatic','disagree_somatic','agree_pass','agree_fail','disagree_pass','sum_score')))
+    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','agree_somatic','agree_germline','disagree_somatic','agree_pass','agree_fail','disagree_pass','sum_score')))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
@@ -423,7 +443,7 @@ def summary(compAB, compBA, weight=False, outfile=None):
 
         s_score = compAB.sum_scores(vtype,weight=weight)
 
-        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, n_agree_som, n_disagree_som, n_agree_pass, n_agree_fail, n_disagree_pass, s_score))
+        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, n_agree_som, n_agree_germ, n_disagree_som, n_agree_pass, n_agree_fail, n_disagree_pass, s_score))
 
         out.append('\t'.join(outstr))
 
