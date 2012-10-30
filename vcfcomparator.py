@@ -138,10 +138,16 @@ class Variant:
         if not self.matched():
             return False
 
+        # preferred way to report somatics
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Germline' in ss and 'Somatic' in ss:
-            return False
-        return True
+        if 'Somatic' == ss[0] == ss[1]:
+            return True
+
+        # alternate way of reporting somatic
+        if self.recA.INFO.get('SOMATIC') and self.recB.INFO.get('SOMATIC'):
+            return True
+
+        return False
 
     def has_pass(self):
         ''' return True if either filter is PASS '''
@@ -387,7 +393,7 @@ def summary(compAB, compBA, weight=False, outfile=None):
         to outfile, or to stdout if outfile=None'''
 
     out = []
-    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','sum_score')))
+    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','agree_somatic','disagree_somatic','agree_pass','agree_fail','disagree_pass','sum_score')))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
@@ -407,8 +413,17 @@ def summary(compAB, compBA, weight=False, outfile=None):
         n_only_B = n_B - n_shared
         n_alt_A  = compAB.altmatched(vtype)
         n_alt_B  = compBA.altmatched(vtype)
-        s_score  = compAB.sum_scores(vtype,weight=weight)
-        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, s_score))
+
+        n_agree_som     = compAB.count_agree_somatic(vtype)
+        n_agree_germ    = compAB.count_agree_germline(vtype)
+        n_disagree_som  = compAB.count_disagree_somatic(vtype)
+        n_agree_pass    = compAB.count_agree_pass(vtype)
+        n_agree_fail    = compAB.count_agree_fail(vtype)
+        n_disagree_pass = compAB.count_disagree_pass(vtype)
+
+        s_score = compAB.sum_scores(vtype,weight=weight)
+
+        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, n_agree_som, n_disagree_som, n_agree_pass, n_agree_fail, n_disagree_pass, s_score))
 
         out.append('\t'.join(outstr))
 
