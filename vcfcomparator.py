@@ -549,8 +549,7 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
                                      vcf_handles[1].metadata['SAMPLE'][i]['Individual'] + "\n")
                     break
     except KeyError as e:
-        sys.stderr.write("Invalid header, make sure vcf has the following metadata: " + str(e) + "\n")
-        sys.exit()
+        sys.stderr.write("Invalid header, a vcf is missing the following metadata: " + str(e) + ", attempting to carry on.\n")
 
     # compare VCFs
     try:
