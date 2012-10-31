@@ -259,16 +259,9 @@ def get_conf_interval(rec, w_indel=50):
     else:
         end += cipos_end
 
-    # if end position is defined on same chromosome in ALT
-    if rec.is_sv:
-        if len(rec.ALT) == 1:
-            if rec.CHROM == rec.ALT[0].chr:
-                end = rec.ALT[0].pos
-                assert end > rec.POS
-
     if rec.is_indel:
-        cipos += w_indel 
-        ciend += w_indel
+        cipos_start += w_indel 
+        end += w_indel
 
     return rec.POS-cipos_start, end
 
@@ -351,9 +344,12 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
     used_B_interval = {}
 
     # initialize SNV iterator
-    snv_recB = h_snv_vcfB.next()
-    while not snv_recB.is_snp:
+    try:
         snv_recB = h_snv_vcfB.next()
+        while not snv_recB.is_snp:
+            snv_recB = h_snv_vcfB.next()
+    except StopIteration:
+        sys.stderr.write("warning: didn't find any SNVs in " + h_snv_vcfB.filename + "\n")
 
     for recA in h_vcfA:
         if mask:
