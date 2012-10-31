@@ -400,7 +400,7 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
                 variant.set_left(snv_recB)
                 match = True
             else:
-                while snv_recB.POS < recA.POS:
+                while snv_recB.CHROM != recA.CHROM or snv_recB.POS < recA.POS:
                     try:
                         snv_recB = h_snv_vcfB.next()
                         if vcfVariantMatch(recA, snv_recB):
