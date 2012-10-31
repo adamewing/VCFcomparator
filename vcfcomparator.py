@@ -232,12 +232,20 @@ class CNV (Variant):
 
 def get_conf_interval(rec, w_indel=50):
     ''' return confidence interval as (start-ci, end+ci), if rec is an indel, w_indel is added to interval'''
-    cipos = ciend = 0
+    cipos_start = cipos_end = 0
+    ciend_start = ciend_end = 0
     
     if 'CIPOS' in rec.INFO:
-        cipos = abs(min(rec.INFO.get('CIPOS')))
+        if len(rec.INFO.get('CIPOS')) == 2:
+            cipos_start, cipos_end = map(abs, rec.INFO.get('CIPOS'))
+        else:
+            cipos_start = cipos_end = abs(rec.INFO.get('CIPOS')[0])
+
     if 'CIEND' in rec.INFO:
-        ciend = abs(max(rec.INFO.get('CIEND')))
+        if len(rec.INFO.get('CIEND')) == 2:
+            ciend_start, ciend_end = map(abs, rec.INFO.get('CIEND'))
+        else:
+            ciend_start = ciend_end = abs(rec.INFO.get('CIEND')[0])
 
     # default to using POS+1 as end
     end = rec.POS+1
@@ -245,9 +253,11 @@ def get_conf_interval(rec, w_indel=50):
     # if 'END' is specified, use as end
     if 'END' in rec.INFO:
         try:
-            end = rec.INFO.get('END')[0]
+            end = rec.INFO.get('END')[0] + ciend_end
         except TypeError:
-            end = rec.INFO.get('END')
+            end = rec.INFO.get('END') + ciend_end
+    else:
+        end += cipos_end
 
     # if end position is defined on same chromosome in ALT
     if rec.is_sv:
@@ -260,7 +270,7 @@ def get_conf_interval(rec, w_indel=50):
         cipos += w_indel 
         ciend += w_indel
 
-    return rec.POS-cipos, end+ciend
+    return rec.POS-cipos_start, end
 
 def get_overlap_coords(iv_a, iv_b):
     ''' return start and end coordinates of overlap between iv_a and iv_b
@@ -543,7 +553,7 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
                                      vcf_handles[1].metadata['SAMPLE'][i]['Individual'] + "\n")
                     break
     except KeyError as e:
-        sys.stderr.write("Invalid header, make sure vcf has for following metadata: " + str(e) + "\n")
+        sys.stderr.write("Invalid header, make sure vcf has the following metadata: " + str(e) + "\n")
         sys.exit()
 
     # compare VCFs
