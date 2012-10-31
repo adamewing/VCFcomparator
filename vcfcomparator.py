@@ -10,6 +10,7 @@ import vcf
 import argparse
 import gzip
 import sys
+from itertools import tee
 from re import search, sub
 from os.path import exists
 from numpy import interp
@@ -327,13 +328,22 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
+def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
+    # copy of file handle for snv iteration and interval fetch
+    h_snv_vcfB = vcf.Reader(filename=h_interval_vcfB.filename, compressed=h_interval_vcfB.filename.endswith('.gz'))
+
     cmp = Comparison()
+
     # keep match symmetric by adding B records already seen to altmatch (intervals only)
     used_B_interval = {}
+
+    # initialize SNV iterator
+    snv_recB = h_snv_vcfB.next()
+    while not snv_recB.is_snp:
+        snv_recB = h_snv_vcfB.next()
 
     for recA in h_vcfA:
         if mask:
@@ -360,8 +370,8 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
 
         # TODO: CNV (need test data)
 
-        if vtype: # only compare known variant types
-            for recB in h_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
+        if vtype in ('INDEL','SV','CNV'): # only compare intervals for known variant types
+            for recB in h_interval_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
                 if vcfVariantMatch(recA, recB):
                     if match: # handle one-to-many matches
                         variant.altmatch.append(recB)
@@ -377,6 +387,23 @@ def compareVCFs(h_vcfA, h_vcfB, w_indel=50, w_sv=1000, mask=None):
                             match = True
 
             cmp.vartype[vtype].append(variant)
+
+        # handle SNVs seperately, ~ 30% speed increase over using fetch() for everything
+        else:
+            if vcfVariantMatch(recA, snv_recB):
+                variant.set_left(snv_recB)
+                match = True
+            else:
+                while snv_recB.POS < recA.POS:
+                    try:
+                        snv_recB = h_snv_vcfB.next()
+                        if vcfVariantMatch(recA, snv_recB):
+                            variant.set_left(snv_recB)
+                            match = True
+                    except StopIteration: # if vcf B ends first
+                        break
+            cmp.vartype[vtype].append(variant)
+
     return cmp
 
 def sv_uid(rec):

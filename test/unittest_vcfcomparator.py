@@ -25,7 +25,7 @@ class testVCFcomparator(unittest.TestCase):
     ## SNV tests ##
 
     def testComparisonMatchedSNV(self):
-        self.assertEqual(self.comparison.matched('SNV'), 2)
+        self.assertEqual(self.comparison.matched('SNV'), 3)
 
     def testMatchedSNVMatched(self):
         self.assertTrue(self.matchedSNV.matched())
