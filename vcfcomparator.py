@@ -230,7 +230,7 @@ class CNV (Variant):
 
 ## functions ##
 
-def get_conf_interval(rec, w_indel=50):
+def get_conf_interval(rec, w_indel=0):
     ''' return confidence interval as (start-ci, end+ci), if rec is an indel, w_indel is added to interval'''
     cipos_start = cipos_end = 0
     ciend_start = ciend_end = 0
@@ -331,7 +331,7 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None, faster_snv=False):
+def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None, faster_snv=False):
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
