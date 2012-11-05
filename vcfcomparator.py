@@ -331,7 +331,7 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
+def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None, faster_snv=False):
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
@@ -376,8 +376,13 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
 
         # TODO: CNV (need test data)
 
-        if vtype in ('INDEL','SV','CNV'): # only compare intervals for known variant types
-            for recB in h_interval_vcfB.fetch(recA.CHROM, recA.start-w, recA.end+w):
+        if (not faster_snv and vtype) or (faster_snv and vtype in ('INDEL','SV','CNV')): # only compare intervals for known variant types
+            w_start = recA.start-w
+            w_end = recA.end+w
+            if w_start < 1:
+                w_start = 1
+
+            for recB in h_interval_vcfB.fetch(recA.CHROM, w_start, w_end):
                 if vcfVariantMatch(recA, recB):
                     if match: # handle one-to-many matches
                         variant.altmatch.append(recB)
@@ -395,7 +400,7 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=50, w_sv=1000, mask=None):
             cmp.vartype[vtype].append(variant)
 
         # handle SNVs seperately, ~ 30% speed increase over using fetch() for everything
-        else:
+        if faster_snv and vtype == 'SNV':
             if vcfVariantMatch(recA, snv_recB):
                 variant.set_left(snv_recB)
                 match = True
@@ -536,20 +541,6 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
     assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
     assert len(vcf_handles) == 2
-
-    # give some warnings if the comparison is between different samples
-    try:
-        if len(vcf_handles[0].metadata['SAMPLE']) != len(vcf_handles[1].metadata['SAMPLE']):
-            sys.write.stderr("warning: vcfs have different numbers of samples")
-        else:
-            for i in range(len(vcf_handles[0].metadata['SAMPLE'])):
-                if vcf_handles[0].metadata['SAMPLE'][i]['Individual'] != vcf_handles[1].metadata['SAMPLE'][i]['Individual']:
-                    sys.stderr.write("comparing two _different_ individuals, if this is not expected please correct Individual metadata in VCF: " +
-                                     vcf_handles[0].metadata['SAMPLE'][i]['Individual'] + " " +
-                                     vcf_handles[1].metadata['SAMPLE'][i]['Individual'] + "\n")
-                    break
-    except KeyError as e:
-        sys.stderr.write("Invalid header, a vcf is missing the following metadata: " + str(e) + ", attempting to carry on.\n")
 
     # compare VCFs
     try:
