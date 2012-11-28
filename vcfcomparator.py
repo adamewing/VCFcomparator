@@ -34,7 +34,7 @@ class Comparison:
         self.vartype = {}
         self.vartype['SNV']   = []
         self.vartype['INDEL'] = []
-        self.vartype['CNV']   = []
+        #self.vartype['CNV']   = []
         self.vartype['SV']    = []
 
     def matched(self, vtype):
@@ -211,7 +211,7 @@ class INDEL (Variant):
         pass
     def score(self, density=False):
         if self.matched():
-            return self.interval_score(density)
+            return 1.0
         return 0.0
 
 class SV (Variant):
@@ -307,7 +307,7 @@ def vcfVariantMatch(recA, recB):
         if recA.POS == recB.POS and recA.REF == recB.REF and recA.ALT == recB.ALT:
             return True
 
-    # indels have to be within w_indel of each other, have same ref and alt alleles
+    # indels must have same ref and alt alleles
     if recA.is_indel and recB.is_indel:
         if recA.REF == recB.REF and recA.ALT == recB.ALT:
             return True
@@ -331,7 +331,7 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None, faster_snv=False):
+def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None): 
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
@@ -376,7 +376,7 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None, faster
 
         # TODO: CNV (need test data)
 
-        if (not faster_snv and vtype) or (faster_snv and vtype in ('INDEL','SV','CNV')): # only compare intervals for known variant types
+        if vtype in ('SNV', 'SV', 'INDEL'): # only compare intervals for known variant types
             w_start = recA.start-w
             w_end = recA.end+w
             if w_start < 1:
@@ -397,22 +397,6 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None, faster
                             used_B_interval[sv_uid(recB)] = recA
                             match = True
 
-            cmp.vartype[vtype].append(variant)
-
-        # handle SNVs seperately, ~ 30% speed increase over using fetch() for everything
-        if faster_snv and vtype == 'SNV':
-            if vcfVariantMatch(recA, snv_recB):
-                variant.set_left(snv_recB)
-                match = True
-            else:
-                while snv_recB.CHROM != recA.CHROM or snv_recB.POS < recA.POS:
-                    try:
-                        snv_recB = h_snv_vcfB.next()
-                        if vcfVariantMatch(recA, snv_recB):
-                            variant.set_left(snv_recB)
-                            match = True
-                    except StopIteration: # if vcf B ends first
-                        break
             cmp.vartype[vtype].append(variant)
 
     return cmp

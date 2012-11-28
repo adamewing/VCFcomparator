@@ -157,12 +157,24 @@ def main(args):
     assert vcf_in and vcf_out
 
     ref = pysam.Fastafile(args.ref_fasta)
+    n_shifted = 0
+    n_precise = 0
+
     for rec in vcf_in:
         if rec.is_sv:
             if 'IMPRECISE' not in rec.INFO:
+                n_precise += 1
+                prev_pos = rec.POS
                 rec = shift_bnd(rec, ref, args.v)
+                shift_pos = rec.POS
+
+                if prev_pos != shift_pos:
+                    n_shifted += 1
 
         vcf_out.write_record(rec)
+
+    if args.v:
+        sys.stderr.write("shifted " + str(n_shifted) + " of " + str(n_precise) + " variants.\n")
 
 
 if __name__ == '__main__':
