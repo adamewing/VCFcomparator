@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/cluster/home/ewingad/usr/local/bin/python
 
 '''
 VCF comparator: compares mutation calls in VCF formatted files
@@ -38,24 +38,44 @@ class Comparison:
         self.vartype['SV']    = []
 
     def matched(self, vtype):
-        ''' count number of matched variants of <vtype> '''
+        ''' count number of matched variants of <vtype> that PASS '''
+        return reduce(lambda x, y: x+(y.matched() and y.both_pass()), self.vartype[vtype], 0)
+
+    def matched_any(self, vtype):
+        ''' count number of matched variants of <vtype> that PASS '''
         return reduce(lambda x, y: x+y.matched(), self.vartype[vtype], 0)
+
+    def unmatched(self, vtype):
+        ''' count total number of unmatched variants of <vtype> that PASS '''
+        return reduce(lambda x, y: x+(not y.matched() and y.has_pass()), self.vartype[vtype], 0)
+
+    def unmatched_any(self, vtype):
+        ''' count total number of unmatched variants of <vtype> that PASS '''
+        return reduce(lambda x, y: x+(not y.matched()), self.vartype[vtype], 0)
+
+    def unmatched_germline(self, vtype):
+        ''' count number of unmatched germline variants of <vtype> that PASS'''
+        return reduce(lambda x, y: x+(not y.matched() and y.has_pass() and y.has_germline()), self.vartype[vtype], 0)
+
+    def unmatched_somatic(self,vtype):
+        ''' count number of unmatched somatic variants of <vtype> that PASS'''
+        return reduce(lambda x, y: x+(not y.matched() and y.has_pass() and y.has_somatic()), self.vartype[vtype], 0)
 
     def altmatched(self,vtype):
         ''' count number of alternate matches '''
         return reduce(lambda x, y: x+len(y.altmatch), self.vartype[vtype], 0)
 
     def count_agree_somatic(self,vtype):
-        ''' count number of matches that agree on somatic status given variant type '''
-        return reduce(lambda x, y: x+y.both_somatic(), self.vartype[vtype], 0)
+        ''' count number of matches that pass and agree on somatic status given variant type '''
+        return reduce(lambda x, y: x+(y.matched() and y.both_somatic() and y.both_pass()), self.vartype[vtype], 0)
 
     def count_agree_germline(self,vtype):
-        ''' count number of matches that agree on somatic status given variant type '''
-        return reduce(lambda x, y: x+y.both_germline(), self.vartype[vtype], 0)
+        ''' count number of matches that pass and agree on germline status given variant type '''
+        return reduce(lambda x, y: x+(y.matched() and y.both_germline() and y.both_pass), self.vartype[vtype], 0)
 
     def count_disagree_somatic(self,vtype):
-        ''' count number of matches that disagree on somatic status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
+        ''' count number of matches that pass and disagree on somatic status given variant type '''
+        return reduce(lambda x, y: x+(y.matched() and y.both_pass() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
 
     def count_agree_pass(self,vtype):
         ''' count number of matches that agree on passing filters given variant type'''
@@ -138,6 +158,18 @@ class Variant:
             return True
         return False
 
+    def has_germline(self):
+        ''' return True if either call is somatic '''
+        if not self.matched():
+            if self.recA.INFO.get('SS') == 'Germline':
+                return True
+            return False
+
+        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
+        if 'Germline' in ss:
+            return True
+        return False
+
     def both_somatic(self):
         ''' return True if both calls are somatic '''
         if not self.matched():
@@ -158,11 +190,6 @@ class Variant:
         ''' return True if both calls are germline '''
         if not self.matched():
             return False
-
-        # preferred way to report somatics
-        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Germline' == ss[0] == ss[1]:
-            return True
 
         # alternate way of reporting somatic
         if self.recA.INFO.get('Germline') and self.recB.INFO.get('Germline'):
@@ -435,13 +462,11 @@ def summary(compAB, compBA, weight=False, outfile=None):
         to outfile, or to stdout if outfile=None'''
 
     out = []
-    out.append('\t'.join(('vtype','A_only','A_alt','B_only','B_alt','shared','agree_somatic','agree_germline','disagree_somatic','agree_pass','agree_fail','disagree_pass','sum_score')))
+    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline','A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline','B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline','A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass')))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
 
-        n_A = len(compAB.vartype[vtype])
-        n_B = len(compBA.vartype[vtype])
         n_shared_AB = compAB.matched(vtype)
         n_shared_BA = compBA.matched(vtype)
 
@@ -451,21 +476,28 @@ def summary(compAB, compBA, weight=False, outfile=None):
                              ") using A-->B\n")
 
         n_shared = n_shared_AB
-        n_only_A = n_A - n_shared
-        n_only_B = n_B - n_shared
+        n_shared_any = compAB.matched_any(vtype)
+        n_only_A = compAB.unmatched(vtype)
+        n_only_B = compBA.unmatched(vtype)
+        n_only_A_any = compAB.unmatched_any(vtype)
+        n_only_B_any = compBA.unmatched_any(vtype)
+        n_only_A_somatic = compAB.unmatched_somatic(vtype)
+        n_only_B_somatic = compBA.unmatched_somatic(vtype)
+        n_only_A_germline = compAB.unmatched_germline(vtype)
+        n_only_B_germline = compBA.unmatched_germline(vtype)
         n_alt_A  = compAB.altmatched(vtype)
         n_alt_B  = compBA.altmatched(vtype)
-
         n_agree_som     = compAB.count_agree_somatic(vtype)
         n_agree_germ    = compAB.count_agree_germline(vtype)
-        n_disagree_som  = compAB.count_disagree_somatic(vtype)
+        n_disagree_som_A  = compAB.count_disagree_somatic(vtype)
+        n_disagree_som_B  = compBA.count_disagree_somatic(vtype)
         n_agree_pass    = compAB.count_agree_pass(vtype)
         n_agree_fail    = compAB.count_agree_fail(vtype)
         n_disagree_pass = compAB.count_disagree_pass(vtype)
 
         s_score = compAB.sum_scores(vtype,weight=weight)
 
-        outstr = map(str, (vtype, n_only_A, n_alt_A, n_only_B, n_alt_B, n_shared, n_agree_som, n_agree_germ, n_disagree_som, n_agree_pass, n_agree_fail, n_disagree_pass, s_score))
+        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, n_disagree_pass))
 
         out.append('\t'.join(outstr))
 
