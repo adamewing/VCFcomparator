@@ -401,7 +401,9 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None):
             variant = SV(recA, None)
             w = w_sv
 
-        # TODO: CNV (need test data)
+        elif recA.ALT == 'CNV':
+            vtype = 'CNV'
+            variant = CNV(recA, None)
 
         if vtype in ('SNV', 'SV', 'INDEL'): # only compare intervals for known variant types
             w_start = recA.start-w
