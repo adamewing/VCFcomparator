@@ -1,4 +1,4 @@
-#!/cluster/home/ewingad/usr/local/bin/python
+#!/usr/bin/env python
 
 '''
 VCF comparator: compares mutation calls in VCF formatted files
@@ -409,20 +409,23 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None):
             if w_start < 1:
                 w_start = 1
 
-            for recB in h_interval_vcfB.fetch(recA.CHROM, w_start, w_end):
-                if vcfVariantMatch(recA, recB):
-                    if match: # handle one-to-many matches
-                        variant.altmatch.append(recB)
-                    else:
-                        assert variant.recB is None
-
-                        # special case for intervals
-                        if vtype in ('INDEL','SV','CNV') and sv_uid(recB) in used_B_interval:
+            try:
+                for recB in h_interval_vcfB.fetch(recA.CHROM, w_start, w_end):
+                    if vcfVariantMatch(recA, recB):
+                        if match: # handle one-to-many matches
                             variant.altmatch.append(recB)
+                        else:
+                            assert variant.recB is None
 
-                        elif variant.set_left(recB):
-                            used_B_interval[sv_uid(recB)] = recA
-                            match = True
+                            # special case for intervals
+                            if vtype in ('INDEL','SV','CNV') and sv_uid(recB) in used_B_interval:
+                                variant.altmatch.append(recB)
+
+                            elif variant.set_left(recB):
+                                used_B_interval[sv_uid(recB)] = recA
+                                match = True
+            except:
+                sys.stderr.write(' '.join(("warning: couldn't fetch from region:", str(recA.CHROM), str(w_start), str(w_end), "\n")))
 
             cmp.vartype[vtype].append(variant)
 
