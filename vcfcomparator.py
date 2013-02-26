@@ -71,7 +71,7 @@ class Comparison:
 
     def count_agree_germline(self,vtype):
         ''' count number of matches that pass and agree on germline status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.both_germline() and y.both_pass), self.vartype[vtype], 0)
+        return reduce(lambda x, y: x+(y.matched() and y.both_germline() and y.both_pass()), self.vartype[vtype], 0)
 
     def count_disagree_somatic(self,vtype):
         ''' count number of matches that pass and disagree on somatic status given variant type '''
@@ -149,25 +149,29 @@ class Variant:
     def has_somatic(self):
         ''' return True if either call is somatic '''
         if not self.matched():
-            if self.recA.INFO.get('SS') == 'Somatic':
+            if self.recA.INFO.get('SS') == 'Somatic' or self.recA.INFO.get('SS') == '2' or self.recA.INFO.get('SOMATIC'):
                 return True
             return False
 
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Somatic' in ss:
+        if 'Somatic' in ss or '2' in ss:
             return True
+
+        if self.recA.INFO.get('SOMATIC') or self.recB.INFO.get('SOMATIC'):
+            return True
+
         return False
 
     def has_germline(self):
-        ''' return True if either call is somatic '''
+        ''' return True if either call is germline '''
         if not self.matched():
-            if self.recA.INFO.get('SS') == 'Germline':
+            if not self.has_somatic():
                 return True
             return False
 
-        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Germline' in ss:
+        if not self.both_somatic():
             return True
+
         return False
 
     def both_somatic(self):
@@ -177,7 +181,7 @@ class Variant:
 
         # preferred way to report somatics
         ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Somatic' == ss[0] == ss[1]:
+        if 'Somatic' == ss[0] == ss[1] or '2' == ss[0] == ss[1]:
             return True
 
         # alternate way of reporting somatic
@@ -191,11 +195,10 @@ class Variant:
         if not self.matched():
             return False
 
-        # alternate way of reporting somatic
-        if self.recA.INFO.get('Germline') and self.recB.INFO.get('Germline'):
-            return True
+        if self.has_somatic():
+            return False
 
-        return False
+        return True 
 
     def has_pass(self):
         ''' return True if either filter is PASS '''
