@@ -3,7 +3,6 @@ VCF comparator: compares mutation calls in VCF formatted files
 requires: 
 PyVCF (https://github.com/jamescasbon/PyVCF)
 numpy (http://numpy.scipy.org/)
-scipy (http://numpy.scipy.org/)
 
 usage: vcfcomparator.py [-h] [-m MASKFILE] [-w] <vcf_file> <vcf_file>
 

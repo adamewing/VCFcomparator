@@ -15,16 +15,6 @@ from re import search, sub
 from os.path import exists
 from numpy import interp
 
-# scipy.stats can be difficult to install properly
-_with_scipy = True
-try:
-    from scipy.stats import norm
-except ImportError as e:
-    sys.stderr.write("\n***\nCould not load scipy.stats: " + str(e) + 
-                     "\nPlease ensure LAPACK and BLAS/ATLAS were compiled properly and re-install scipy" +
-                     "\nVCFcomparator may still be used without the -w/--weight_intervals option\n***\n")
-    _with_scipy = False
-
 ## classes ##
 
 class Comparison:
@@ -128,18 +118,20 @@ class Variant:
         assert len_a > 0
         assert len_b > 0
 
-
         s = float(2*ol_width)/float(len_a+len_b)
-        if density: # weight overlap based on cumulative density of normal distribution
-            den_a = 1.0
-            den_b = 1.0
-            if ol_width < len_a:
-                den_a = interval_density(iv_a, ol_coords)
-            if ol_width < len_b:
-                den_b = interval_density(iv_b, ol_coords)
-            s = s * den_a * den_b
 
         return s
+
+    def somatic_in_format(self, rec):
+        SS = []
+        for sample in rec.samples:
+            calldata = sample.data
+            if 'SS' in calldata._fields:
+                SS.append(calldata.SS)
+
+        if '2' in SS:
+            return True
+        return False
 
     def matched(self):
         if self.recA and self.recB:
@@ -149,7 +141,7 @@ class Variant:
     def has_somatic(self):
         ''' return True if either call is somatic '''
         if not self.matched():
-            if self.recA.INFO.get('SS') == 'Somatic' or self.recA.INFO.get('SS') == '2' or self.recA.INFO.get('SOMATIC'):
+            if self.recA.INFO.get('SS') == 'Somatic' or self.recA.INFO.get('SS') == '2' or self.recA.INFO.get('SOMATIC') or self.somatic_in_format(self.recA):
                 return True
             return False
 
@@ -158,6 +150,9 @@ class Variant:
             return True
 
         if self.recA.INFO.get('SOMATIC') or self.recB.INFO.get('SOMATIC'):
+            return True
+
+        if self.somatic_in_format(self.recA) or self.somatic_in_format(self.recB):
             return True
 
         return False
@@ -186,6 +181,9 @@ class Variant:
 
         # alternate way of reporting somatic
         if self.recA.INFO.get('SOMATIC') and self.recB.INFO.get('SOMATIC'):
+            return True
+
+        if self.somatic_in_format(self.recA) and self.somatic_in_format(self.recB):
             return True
 
         return False
@@ -592,11 +590,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
-    parser.add_argument('-w', '--weight_intervals', dest='weight_intervals', action='store_true', default=False,
-                        help='apply a normally-distributed weight to interval match scores')
+    parser.add_argument('-o', '--outdir', dest='outdir', default='.', help='directory for output')
 
     args = parser.parse_args()
-    if not _with_scipy:
-        sys.stderr.write("** -w/--weight_intervals overridden (set False) as scipy.stats could not be loaded\n")
-        args.weight_intervals = False
     main(args)
