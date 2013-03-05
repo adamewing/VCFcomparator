@@ -13,6 +13,7 @@ import sys
 from itertools import tee
 from re import search, sub
 from os.path import exists
+from os import remove
 from numpy import interp
 
 ## classes ##
@@ -79,9 +80,9 @@ class Comparison:
        ''' count number of matches where one call passed and the other did not given variant type '''
        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[vtype], 0)
 
-    def sum_scores(self,vtype, weight=False):
+    def sum_scores(self,vtype):
         ''' return sum of all scores for variant type '''
-        return reduce(lambda x, y: x+y.score(weight), self.vartype[vtype], 0.0)
+        return reduce(lambda x, y: x+y.score(), self.vartype[vtype], 0.0)
 
 class Variant:
     ''' base class for variant types 
@@ -103,7 +104,7 @@ class Variant:
             return True
         return False
 
-    def interval_score(self, density=False):
+    def interval_score(self):
         ''' scoring function for intervals, based on amount of overlap '''
         # get pos,end +/- confidence intervals if present
         iv_a = get_conf_interval(self.recA)
@@ -227,7 +228,7 @@ class SNV (Variant):
         else:
             return 'transversion'
 
-    def score(self, density=False):
+    def score(self):
         if self.matched():
             return 1.0
         return 0.0
@@ -237,23 +238,23 @@ class INDEL (Variant):
     ''' short insertion/deletion subclass '''
     def vtype(self):
         pass
-    def score(self, density=False):
+    def score(self):
         if self.matched():
             return 1.0
         return 0.0
 
 class SV (Variant):
     ''' structural variant subclass '''
-    def score(self, density=False):
+    def score(self):
         if self.matched():
-            return self.interval_score(density)
+            return self.interval_score()
         return 0.0
 
 class CNV (Variant):
     ''' copy number variant subclass '''
-    def score(self, density=False):
+    def score(self):
         if self.matched():
-            return self.interval_score(density)
+            return self.interval_score()
         return 0.0
 
 ## functions ##
@@ -300,32 +301,6 @@ def get_overlap_coords(iv_a, iv_b):
     if min(iv_a[1], iv_b[1]) - max(iv_a[0], iv_b[0]) > 0: # is there overlap?
         return max(iv_a[0], iv_b[0]), min(iv_a[1], iv_b[1])
     return 0,0
-
-def interval_density(iv, window):
-    ''' returns cumulative density of a window over a rescaled interval (iv)'''
-
-    # set left = 0 and rescale to (-3,3) (adjusting will change how quickly the score function drops off at extremes)
-    norm_scale = [-3.0, 3.0]
-    iv_scale = [0.0, float(iv[1]-iv[0])]
-
-    rel_w_start = window[0] - iv[0]
-    rel_w_end = window[1] - iv[0]
-
-    w_s  = interp(rel_w_start, iv_scale, norm_scale)
-    w_e  = interp(rel_w_end, iv_scale, norm_scale)
-
-    return norm_density(w_s, w_e)
-
-def norm_density(start,end):
-    ''' return cumulative denisty of normal distribution (from start to end)'''
-    start = float(start)
-    end = float(end)
-
-    rv = norm()
-    d_left = rv.cdf(start)
-    d_right = 1.0 - rv.cdf(end)
-
-    return 1.0 - d_left - d_right
 
 def vcfVariantMatch(recA, recB):
     ''' return True if SNV/INDEL/SV/CNV intervals match given critera for each variant type '''
@@ -463,7 +438,7 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB, compBA, weight=False, outfile=None):
+def summary(compAB, compBA, outfile=None):
     ''' given A --> B comparison and B --> A comparison, output summary stats 
         to outfile, or to stdout if outfile=None'''
 
@@ -501,8 +476,9 @@ def summary(compAB, compBA, weight=False, outfile=None):
         n_agree_fail    = compAB.count_agree_fail(vtype)
         n_disagree_pass = compAB.count_disagree_pass(vtype)
 
-        s_score = compAB.sum_scores(vtype,weight=weight)
+        s_score = compAB.sum_scores(vtype)
 
+        #FIXME
         outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, n_disagree_pass))
 
         out.append('\t'.join(outstr))
@@ -519,18 +495,18 @@ def outputVCF(comparison, inVCFhandle):
     ifname = inVCFhandle.filename
     assert ifname.endswith('.vcf.gz')
 
-    ofname = sub('vcf.gz$', 'matched.vcf', ifname)
-    vcfout_match   = vcf.Writer(file(ofname, 'w'), inVCFhandle)
+    ofname_match = sub('vcf.gz$', 'matched.vcf', ifname)
+    vcfout_match   = vcf.Writer(file(ofname_match, 'w'), inVCFhandle)
 
-    ofname = sub('vcf.gz$', 'unmatched.vcf', ifname)
-    vcfout_unmatch = vcf.Writer(file(ofname, 'w'), inVCFhandle)
+    ofname_unmatch = sub('vcf.gz$', 'unmatched.vcf', ifname)
+    vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
 
     vars = {}
     for vtype in comparison.vartype.keys():
         for var in comparison.vartype[vtype]:
             f_loc = float(var.recA.POS)
 
-            # make sure key is unique
+            # make sure key is unique FIXME
             while f_loc in vars:
                 f_loc += 0.001 # hopefully there aren't 1000 records with the same POS...
             vars[f_loc] = var
@@ -545,6 +521,22 @@ def outputVCF(comparison, inVCFhandle):
         else:
             vcfout_unmatch.write_record(vars[key].recA)
 
+    vcfout_match.close()
+    vcfout_unmatch.close()
+
+    gzipfile(ofname_match, delete_original=True)
+    gzipfile(ofname_unmatch, delete_original=True)
+
+def gzipfile(filename, delete_original=False):
+    outfile = gzip.open(filename + '.gz', 'wb')
+    with open(filename, 'r') as infile:
+        for line in infile:
+            outfile.write(line)
+    outfile.close()
+
+    if delete_original:
+        remove(filename)
+
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
     vcf_handles = []
@@ -558,7 +550,7 @@ def openVCFs(vcf_list):
 
     return vcf_handles
 
-def parseVCFs(vcf_list, maskfile=None, weight=False):
+def parseVCFs(vcf_list, maskfile=None):
     ''' handle the list of vcf files and handle errors '''
     assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
@@ -576,7 +568,7 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
         resultBA = compareVCFs(vcf_handles[1], vcf_handles[0])
 
         # output
-        summary(resultAB, resultBA, weight=weight)
+        summary(resultAB, resultBA)
         outputVCF(resultAB, vcf_handles[0]) 
         outputVCF(resultBA, vcf_handles[1])
 
@@ -584,7 +576,7 @@ def parseVCFs(vcf_list, maskfile=None, weight=False):
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
 
 def main(args):
-    parseVCFs(args.vcf, maskfile=args.maskfile, weight=args.weight_intervals)
+    parseVCFs(args.vcf, maskfile=args.maskfile)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
