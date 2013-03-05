@@ -12,8 +12,8 @@ import gzip
 import sys
 from itertools import tee
 from re import search, sub
-from os.path import exists
-from os import remove
+from os.path import exists, basename
+from os import remove, makedirs
 from numpy import interp
 
 ## classes ##
@@ -490,16 +490,23 @@ def summary(compAB, compBA, outfile=None):
     if outfile:
         f.close()
 
-def outputVCF(comparison, inVCFhandle):
+def outputVCF(comparison, inVCFhandle, outdir):
     ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A'''
-    ifname = inVCFhandle.filename
+    ifname = basename(inVCFhandle.filename)
     assert ifname.endswith('.vcf.gz')
+
+    if outdir is not None:
+        if not exists(outdir):
+            sys.stderr.write("creating output directory: " + outdir + "\n")
+            makedirs(outdir)
+        ifname = outdir + '/' + ifname
 
     ofname_match = sub('vcf.gz$', 'matched.vcf', ifname)
     vcfout_match   = vcf.Writer(file(ofname_match, 'w'), inVCFhandle)
 
     ofname_unmatch = sub('vcf.gz$', 'unmatched.vcf', ifname)
     vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
+
 
     vars = {}
     for vtype in comparison.vartype.keys():
@@ -569,8 +576,8 @@ def parseVCFs(vcf_list, maskfile=None):
 
         # output
         summary(resultAB, resultBA)
-        outputVCF(resultAB, vcf_handles[0]) 
-        outputVCF(resultBA, vcf_handles[1])
+        outputVCF(resultAB, vcf_handles[0], args.outdir) 
+        outputVCF(resultBA, vcf_handles[1], args.outdir)
 
     except ValueError as e:
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
@@ -582,7 +589,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
-    parser.add_argument('-o', '--outdir', dest='outdir', default='.', help='directory for output')
+    parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
 
     args = parser.parse_args()
     main(args)
