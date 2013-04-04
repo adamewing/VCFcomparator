@@ -10,11 +10,11 @@ import vcf
 import argparse
 import gzip
 import sys
+import subprocess
 from itertools import tee
 from re import search, sub
 from os.path import exists, basename
 from os import remove, makedirs
-from numpy import interp
 
 ## classes ##
 
@@ -534,6 +534,9 @@ def outputVCF(comparison, inVCFhandle, outdir):
     gzipfile(ofname_match, delete_original=True)
     gzipfile(ofname_unmatch, delete_original=True)
 
+def tabixfile(filename, delete_original=False):
+    pass
+
 def gzipfile(filename, delete_original=False):
     outfile = gzip.open(filename + '.gz', 'wb')
     with open(filename, 'r') as infile:
@@ -590,6 +593,7 @@ if __name__ == '__main__':
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
     parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
+    # TODO add option for tabix output
 
     args = parser.parse_args()
     main(args)
