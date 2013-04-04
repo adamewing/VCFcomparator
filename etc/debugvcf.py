@@ -37,6 +37,7 @@ if len(sys.argv) == 2:
             for call in rec.samples:
                 data = call.data
     except:
+        recnum += 1
         print "parse error in VCF on line",recnum
         print '-'*60
         traceback.print_exc(file=sys.stdout)
