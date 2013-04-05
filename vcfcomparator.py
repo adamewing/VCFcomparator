@@ -11,7 +11,7 @@ import argparse
 import gzip
 import sys
 import subprocess
-from itertools import tee
+import time
 from re import search, sub
 from os.path import exists, basename
 from os import remove, makedirs
@@ -80,6 +80,9 @@ class Comparison:
        ''' count number of matches where one call passed and the other did not given variant type '''
        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[vtype], 0)
 
+    def count_total_somatic(self, vtype):
+       return reduce(lambda  x, y: x+y.has_somatic(), self.vartype[vtype], 0)
+
     def sum_scores(self,vtype):
         ''' return sum of all scores for variant type '''
         return reduce(lambda x, y: x+y.score(), self.vartype[vtype], 0.0)
@@ -130,7 +133,7 @@ class Variant:
             if 'SS' in calldata._fields:
                 SS.append(calldata.SS)
 
-        if '2' in SS:
+        if '2' in SS or 2 in SS:
             return True
         return False
 
@@ -334,7 +337,7 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None): 
+def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, mask=None): 
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
@@ -354,9 +357,18 @@ def compareVCFs(h_vcfA, h_interval_vcfB, w_indel=0, w_sv=1000, mask=None):
     except StopIteration:
         sys.stderr.write("warning: didn't find any SNVs in " + h_snv_vcfB.filename + "\n")
 
+    recnum = 0
     for recA in h_vcfA:
+        recnum += 1
         if mask:
             pass # FIXME not implemented
+
+        if verbose:
+            if recnum % 1000 == 0:
+                localtime = time.asctime( time.localtime(time.time()) )
+                sys.stderr.write(str(localtime) + ": " + h_vcfA.filename + " vs " 
+                                 + h_interval_vcfB.filename + ": " + str(recnum) 
+                                 + " records compared\n")
 
         match = False
         vtype = None
@@ -443,7 +455,7 @@ def summary(compAB, compBA, outfile=None):
         to outfile, or to stdout if outfile=None'''
 
     out = []
-    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline','A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline','B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline','A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass')))
+    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline','A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline','B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline','A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass','total_somatic')))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
@@ -475,11 +487,12 @@ def summary(compAB, compBA, outfile=None):
         n_agree_pass    = compAB.count_agree_pass(vtype)
         n_agree_fail    = compAB.count_agree_fail(vtype)
         n_disagree_pass = compAB.count_disagree_pass(vtype)
+        n_somatic = compAB.count_total_somatic(vtype)
 
         s_score = compAB.sum_scores(vtype)
 
         #FIXME
-        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, n_disagree_pass))
+        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, n_disagree_pass,n_somatic))
 
         out.append('\t'.join(outstr))
 
@@ -569,13 +582,13 @@ def parseVCFs(vcf_list, maskfile=None):
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1])
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0])
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose)
 
         # output
         summary(resultAB, resultBA)
@@ -593,6 +606,7 @@ if __name__ == '__main__':
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
     parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
     # TODO add option for tabix output
 
     args = parser.parse_args()
