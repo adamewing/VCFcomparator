@@ -355,6 +355,11 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
     for recA in h_vcfA:
         recnum += 1
         if mask:
+            # skip variants on chromosomes not in mask
+            if recA.CHROM not in mask.contigs:
+                nskip += 1
+                continue
+
             if len(list(mask.fetch(recA.CHROM, recA.POS, recA.POS+1))) > 0:
                 nskip += 1
                 continue
