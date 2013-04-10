@@ -351,13 +351,12 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
     used_B_interval = {}
 
     recnum = 0
+    nskip = 0
     for recA in h_vcfA:
         recnum += 1
         if mask:
-            if mask.fetch(recA.CHROM, recA.POS, recA.POS+1):
-                if verbose:
-                    localtime = time.asctime(time.localtime(time.time()))
-                    sys.stderr.write(str(localtime) + ": skipped masked: " + str(recA) + "\n")
+            if len(list(mask.fetch(recA.CHROM, recA.POS, recA.POS+1))) > 0:
+                nskip += 1
                 continue
 
         if verbose:
@@ -366,7 +365,7 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
                 sys.stderr.write(str(localtime) + ": " + basename(h_vcfA.filename) + " vs " 
                                  + basename(h_interval_vcfB.filename) + ": " + str(recnum) 
                                  + " records compared, pos: " + str(recA.CHROM) + ":"
-                                 + str(recA.POS) + "\n")
+                                 + str(recA.POS) + " masked: " + str(nskip) + "\n")
 
         match = False
         vtype = None
