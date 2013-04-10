@@ -7,6 +7,7 @@ Contact: Adam Ewing (ewingad@soe.ucsc.edu)
 '''
 
 import vcf
+import pysam
 import argparse
 import gzip
 import sys
@@ -579,7 +580,6 @@ def parseVCFs(vcf_list, maskfile=None):
     tabix_mask = None
     if maskfile is not None:
         try:
-            assert maskfile.endswith('.gz')
             tabix_mask = pysam.Tabixfile(maskfile)
         except:
             sys.stderr.write("could not read mask: " + maskfile + "  is it a tabix-indexes bgzipped bed?\n")
