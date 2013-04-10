@@ -349,26 +349,23 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
     # keep match symmetric by adding B records already seen to altmatch (intervals only)
     used_B_interval = {}
 
-    # initialize SNV iterator
-    try:
-        snv_recB = h_snv_vcfB.next()
-        while not snv_recB.is_snp:
-            snv_recB = h_snv_vcfB.next()
-    except StopIteration:
-        sys.stderr.write("warning: didn't find any SNVs in " + h_snv_vcfB.filename + "\n")
-
     recnum = 0
     for recA in h_vcfA:
         recnum += 1
         if mask:
-            pass # FIXME not implemented
+            if mask.fetch(recA.CHROM, recA.POS, recA.POS+1):
+                if verbose:
+                    localtime = time.asctime(time.localtime(time.time()))
+                    sys.stderr.write(str(localtime) + ": skipped masked: " + str(recA) + "\n")
+                continue
 
         if verbose:
-            if recnum % 1000 == 0:
-                localtime = time.asctime( time.localtime(time.time()) )
-                sys.stderr.write(str(localtime) + ": " + h_vcfA.filename + " vs " 
-                                 + h_interval_vcfB.filename + ": " + str(recnum) 
-                                 + " records compared\n")
+            if recnum % 10000 == 0:
+                localtime = time.asctime(time.localtime(time.time()))
+                sys.stderr.write(str(localtime) + ": " + basename(h_vcfA.filename) + " vs " 
+                                 + basename(h_interval_vcfB.filename) + ": " + str(recnum) 
+                                 + " records compared, pos: " + str(recA.CHROM) + ":"
+                                 + str(recA.POS) + "\n")
 
         match = False
         vtype = None
@@ -579,16 +576,25 @@ def parseVCFs(vcf_list, maskfile=None):
     vcf_handles = openVCFs(vcf_list) 
     assert len(vcf_handles) == 2
 
+    tabix_mask = None
+    if maskfile is not None:
+        try:
+            assert maskfile.endswith('.gz')
+            tabix_mask = pysam.Tabixfile(maskfile)
+        except:
+            sys.stderr.write("could not read mask: " + maskfile + "  is it a tabix-indexes bgzipped bed?\n")
+            sys.exit()
+
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose)
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose)
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask)
 
         # output
         summary(resultAB, resultBA)
@@ -604,7 +610,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
-    parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='BED file of masked intervals') 
+    parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='tabix-indexed BED file of masked intervals') 
     parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
     # TODO add option for tabix output

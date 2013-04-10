@@ -32,10 +32,30 @@ if len(sys.argv) == 2:
 
     recnum = 0
     try:
+        use_info_somatic = False
+        use_info_ss = False
+        use_fmt_ss = False
+        use_filter_somatic = False
+
         for rec in vcfin:
             recnum += 1
+            if rec.FILTER == 'GERMLINE' or rec.FILTER == 'SOMATIC':
+                use_filter_somatic = True
+            if rec.INFO.get('SOMATIC'):
+                use_info_somatic=True
+            if rec.INFO.get('SS'):
+                use_info_ss=True
+
             for call in rec.samples:
                 data = call.data
+                if 'SS' in data._fields:
+                    use_fmt_ss = True
+
+        print "use_info_somatic:", use_info_somatic
+        print "use_info_ss", use_info_ss
+        print "use_fmt_ss", use_fmt_ss
+        print "use_filter_somatic", use_filter_somatic
+
     except:
         recnum += 1
         print "parse error in VCF on line",recnum
