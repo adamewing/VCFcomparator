@@ -36,6 +36,9 @@ if len(sys.argv) == 2:
         use_info_ss = False
         use_fmt_ss = False
         use_filter_somatic = False
+        indel_count = 0
+        snv_count = 0
+        sv_count = 0
 
         for rec in vcfin:
             recnum += 1
@@ -46,15 +49,30 @@ if len(sys.argv) == 2:
             if rec.INFO.get('SS'):
                 use_info_ss=True
 
+            assert not (rec.is_snp and rec.is_indel and rec.is_sv)
+            if rec.is_snp:
+                snv_count += 1
+            if rec.is_indel:
+                indel_count += 1
+            if rec.is_sv:
+                sv_count += 1
+
             for call in rec.samples:
                 data = call.data
                 if 'SS' in data._fields:
                     use_fmt_ss = True
 
-        print "use_info_somatic:", use_info_somatic
-        print "use_info_ss", use_info_ss
-        print "use_fmt_ss", use_fmt_ss
-        print "use_filter_somatic", use_filter_somatic
+        print "Total records:",recnum
+        print "-"*60
+        print "uses INFO/SOMATIC:", use_info_somatic
+        print "uses INFO/SS=Somatic/Germline:", use_info_ss
+        print "uses FORMAT/SS=0,1,2,...:", use_fmt_ss
+        print "uses FILTER/SOMATIC (please correct if true, filter should be PASS or filter name):", use_filter_somatic
+        print "-"*60
+        print "SNV count:",snv_count
+        print "INDEL count:",indel_count
+        print "SV count:",sv_count
+        print "-"*60
 
     except:
         recnum += 1

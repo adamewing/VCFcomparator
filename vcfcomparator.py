@@ -489,12 +489,16 @@ def summary(compAB, compBA, outfile=None):
         n_agree_pass    = compAB.count_agree_pass(vtype)
         n_agree_fail    = compAB.count_agree_fail(vtype)
         n_disagree_pass = compAB.count_disagree_pass(vtype)
-        n_somatic = compAB.count_total_somatic(vtype)
 
         s_score = compAB.sum_scores(vtype)
 
-        #FIXME
-        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, n_disagree_pass,n_somatic))
+        #FIXME: probably TMI
+        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, 
+                           n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, 
+                           n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, 
+                           n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, 
+                           n_disagree_pass)
+                    )
 
         out.append('\t'.join(outstr))
 
