@@ -91,12 +91,14 @@ class Comparison:
 class Variant:
     ''' base class for variant types 
         vcf_recA and vcf_recB are vcf._Record objects or None '''
-    def __init__(self, vcf_recA, vcf_recB, somatic=False):
+    def __init__(self, vcf_recA, vcf_recB):
         self.recA = vcf_recA
         self.recB = vcf_recB
 
         # if there is more than one match, the rest are stored here
         self.altmatch = []
+
+        self.truth = None # will be a VCF record if not None
 
     def __str__(self):
         return str(self.recA) + "\t" + str(self.recB)
@@ -143,24 +145,45 @@ class Variant:
             return True
         return False
 
-    def has_somatic(self):
-        ''' return True if either call is somatic '''
-        if not self.matched():
-            if self.recA.INFO.get('SS') == 'Somatic' or self.recA.INFO.get('SS') == '2' or self.recA.INFO.get('SOMATIC') or self.somatic_in_format(self.recA):
-                return True
-            return False
-
-        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Somatic' in ss or '2' in ss:
+    def recA_somatic(self):
+        ''' return True if recA is somatic '''
+        if str(self.recA.INFO.get('SS')).upper() in ['SOMATIC', '2']:
             return True
 
-        if self.recA.INFO.get('SOMATIC') or self.recB.INFO.get('SOMATIC'):
+        if self.recA.INFO.get('SOMATIC'):
             return True
 
-        if self.somatic_in_format(self.recA) or self.somatic_in_format(self.recB):
+        if self.somatic_in_format(self.recA):
             return True
 
         return False
+
+    def recB_somatic(self):
+        ''' return True if recB is somatic '''
+        if not self.matched():
+            return False
+
+        if str(self.recB.INFO.get('SS')).upper() in ['SOMATIC', '2']:
+            return True
+
+        if self.recB.INFO.get('SOMATIC'):
+            return True
+
+        if self.somatic_in_format(self.recB):
+            return True
+
+        return False
+
+    def has_somatic(self):
+        ''' return True if either call is somatic '''
+        return self.recA_somatic() or self.recB_somatic()
+
+    def both_somatic(self):
+        ''' return True if both calls are somatic '''
+        if not self.matched():
+            return False
+
+        return self.recA_somatic() and self.recB_somatic()
 
     def has_germline(self):
         ''' return True if either call is germline '''
@@ -170,25 +193,6 @@ class Variant:
             return False
 
         if not self.both_somatic():
-            return True
-
-        return False
-
-    def both_somatic(self):
-        ''' return True if both calls are somatic '''
-        if not self.matched():
-            return False
-
-        # preferred way to report somatics
-        ss = [self.recA.INFO.get('SS'), self.recB.INFO.get('SS')]
-        if 'Somatic' == ss[0] == ss[1] or '2' == ss[0] == ss[1]:
-            return True
-
-        # alternate way of reporting somatic
-        if self.recA.INFO.get('SOMATIC') and self.recB.INFO.get('SOMATIC'):
-            return True
-
-        if self.somatic_in_format(self.recA) and self.somatic_in_format(self.recB):
             return True
 
         return False
@@ -212,6 +216,7 @@ class Variant:
 
         if not self.recA.FILTER or not self.recB.FILTER:
             return True
+
         return False
 
     def both_pass(self):
@@ -338,7 +343,7 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, mask=None): 
+def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, mask=None, truth=None): 
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
@@ -401,6 +406,7 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
             if w_start < 1:
                 w_start = 1
 
+            # try to find a match in the other VCF
             try:
                 for recB in h_interval_vcfB.fetch(recA.CHROM, w_start, w_end):
                     if vcfVariantMatch(recA, recB):
@@ -418,6 +424,15 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
                                 match = True
             except:
                 sys.stderr.write(' '.join(("warning: couldn't fetch from region:", str(recA.CHROM), str(w_start), str(w_end), "\n")))
+
+            # compare to truth if present
+            if truth is not None:
+                #try:
+                for recT in truth.fetch(recA.CHROM, w_start, w_end):
+                    if vcfVariantMatch(recA, recT):
+                        recA.truth = recT
+                #except:
+                #    sys.stderr.write(' '.join(("warning: truth VCF missing region:", str(recA.CHROM), str(w_start), str(w_end), "\n")))
 
             cmp.vartype[vtype].append(variant)
 
@@ -457,7 +472,11 @@ def summary(compAB, compBA, outfile=None):
         to outfile, or to stdout if outfile=None'''
 
     out = []
-    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline','A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline','B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline','A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass','total_somatic')))
+    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline',
+                          'A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline',
+                          'B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline',
+                          'A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass'
+                          )))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
@@ -497,8 +516,7 @@ def summary(compAB, compBA, outfile=None):
                            n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, 
                            n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, 
                            n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, 
-                           n_disagree_pass)
-                    )
+                           n_disagree_pass))
 
         out.append('\t'.join(outstr))
 
@@ -525,7 +543,6 @@ def outputVCF(comparison, inVCFhandle, outdir):
 
     ofname_unmatch = sub('vcf.gz$', 'unmatched.vcf', ifname)
     vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
-
 
     vars = {}
     for vtype in comparison.vartype.keys():
@@ -579,7 +596,7 @@ def openVCFs(vcf_list):
 
     return vcf_handles
 
-def parseVCFs(vcf_list, maskfile=None):
+def parseVCFs(vcf_list, maskfile=None, truthvcf=None):
     ''' handle the list of vcf files and handle errors '''
     assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
@@ -590,19 +607,27 @@ def parseVCFs(vcf_list, maskfile=None):
         try:
             tabix_mask = pysam.Tabixfile(maskfile)
         except:
-            sys.stderr.write("could not read mask: " + maskfile + "  is it a tabix-indexes bgzipped bed?\n")
+            sys.stderr.write("could not read mask: " + maskfile + "  is it a tabix-indexed bgzipped BED?\n")
             sys.exit()
 
+    tabix_truth = None
+    if truthvcf is not None:
+        try:
+            tabix_truth = openVCFs(list(truthvcf))[0]
+        except:
+            sys.stderr.write("could not read mask: " + truthvcf + "  is it a tabix-indexed bgzipped VCF?\n")
+            sys.exit()
+            
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask)
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask)
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth)
 
         # output
         summary(resultAB, resultBA)
@@ -613,13 +638,14 @@ def parseVCFs(vcf_list, maskfile=None):
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
 
 def main(args):
-    parseVCFs(args.vcf, maskfile=args.maskfile)
+    parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='tabix-indexed files in VCF format')
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='tabix-indexed BED file of masked intervals') 
     parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
+    parser.add_argument('-t', '--truth', dest='truth', default=None, help='also compare results to a "truth" VCF (should be sorted and tabix-indexed)')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
     # TODO add option for tabix output
 
