@@ -343,11 +343,11 @@ def vcfIntervalMatch(recA, recB):
         return True
     return False
 
-def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, mask=None, truth=None): 
+# copy of file handle for snv iteration and interval fetch
+def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, mask=None, truth=None, chrom=None, fetch_start=0, fetch_end=int(1e9)): 
     ''' does most of the work - unidirectional comparison vcfA --> vcfB
         h_vcfA and h_vcfB are pyvcf handles (vcf.Reader) '''
 
-    # copy of file handle for snv iteration and interval fetch
     h_snv_vcfB = vcf.Reader(filename=h_interval_vcfB.filename, compressed=h_interval_vcfB.filename.endswith('.gz'))
 
     cmp = Comparison()
@@ -357,7 +357,9 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
 
     recnum = 0
     nskip = 0
-    for recA in h_vcfA:
+
+    # "int(1e9)" is just a value larger than any hg19 chromosome, fetch(chrom,start) not supported
+    for recA in h_vcfA.fetch(chrom,fetch_start,fetch_end):
         recnum += 1
         if mask:
             # skip variants on chromosomes not in mask
@@ -467,16 +469,13 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB, compBA, outfile=None):
-    ''' given A --> B comparison and B --> A comparison, output summary stats 
-        to outfile, or to stdout if outfile=None'''
+def summary(compAB, compBA, outfile=None, chrom=None, start=None, end=None):
+    ''' given A --> B comparison and B --> A comparison, output summary stats to outfile, or to stdout if outfile=None '''
 
     out = []
-    out.append('\t'.join(('vtype','A_only_any_total','A_only_pass_total','A_only_pass_somatic','A_only_pass_germline',
-                          'A_alt','B_only_any_total','B_only_pass_total','B_only_pass_somatic','B_only_pass_germline',
-                          'B_alt','match_any_total','match_pass_total','match_pass_somatic','match_pass_germline',
-                          'A_disagree_somatic_pass','B_disagree_somatic_pass','agree_pass','agree_fail','disagree_pass'
-                          )))
+    out.append(' '.join(('chrom','start','end','vtype','A_only_pass_somatic','A_only_pass_germline', 'B_only_pass_somatic',
+                         'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
+                         'B_pass_disagree_somatic')))
 
     for vtype in compAB.vartype.keys():
         assert compBA.vartype.has_key(vtype)
@@ -485,40 +484,25 @@ def summary(compAB, compBA, outfile=None):
         n_shared_BA = compBA.matched(vtype)
 
         if n_shared_AB != n_shared_BA:
-            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + 
-                             str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
+            if chrom is not None:
+                sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
+ 
+            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
                              ") using A-->B\n")
 
-        n_shared = n_shared_AB
-        n_shared_any = compAB.matched_any(vtype)
-        n_only_A = compAB.unmatched(vtype)
-        n_only_B = compBA.unmatched(vtype)
-        n_only_A_any = compAB.unmatched_any(vtype)
-        n_only_B_any = compBA.unmatched_any(vtype)
-        n_only_A_somatic = compAB.unmatched_somatic(vtype)
-        n_only_B_somatic = compBA.unmatched_somatic(vtype)
+        n_only_A_somatic  = compAB.unmatched_somatic(vtype)
+        n_only_B_somatic  = compBA.unmatched_somatic(vtype)
         n_only_A_germline = compAB.unmatched_germline(vtype)
         n_only_B_germline = compBA.unmatched_germline(vtype)
-        n_alt_A  = compAB.altmatched(vtype)
-        n_alt_B  = compBA.altmatched(vtype)
-        n_agree_som     = compAB.count_agree_somatic(vtype)
-        n_agree_germ    = compAB.count_agree_germline(vtype)
+        n_agree_som       = compAB.count_agree_somatic(vtype)
+        n_agree_germ      = compAB.count_agree_germline(vtype)
         n_disagree_som_A  = compAB.count_disagree_somatic(vtype)
         n_disagree_som_B  = compBA.count_disagree_somatic(vtype)
-        n_agree_pass    = compAB.count_agree_pass(vtype)
-        n_agree_fail    = compAB.count_agree_fail(vtype)
-        n_disagree_pass = compAB.count_disagree_pass(vtype)
 
-        s_score = compAB.sum_scores(vtype)
+        outstr = map(str, (chrom, start, end, vtype, n_only_A_somatic, n_only_A_germline, n_only_B_somatic, n_only_B_germline, 
+                           n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B))
 
-        #FIXME: probably TMI
-        outstr = map(str, (vtype, n_only_A_any, n_only_A, n_only_A_somatic, n_only_A_germline, 
-                           n_alt_A, n_only_B_any, n_only_B, n_only_B_somatic, n_only_B_germline, 
-                           n_alt_B, n_shared_any, n_shared, n_agree_som, n_agree_germ, 
-                           n_disagree_som_A, n_disagree_som_B, n_agree_pass, n_agree_fail, 
-                           n_disagree_pass))
-
-        out.append('\t'.join(outstr))
+        out.append(' '.join(outstr))
 
     f = sys.stdout
     if outfile:
@@ -596,7 +580,7 @@ def openVCFs(vcf_list):
 
     return vcf_handles
 
-def parseVCFs(vcf_list, maskfile=None, truthvcf=None):
+def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, end=None):
     ''' handle the list of vcf files and handle errors '''
     assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
@@ -621,16 +605,16 @@ def parseVCFs(vcf_list, maskfile=None, truthvcf=None):
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth)
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth)
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
 
         # output
-        summary(resultAB, resultBA)
+        summary(resultAB, resultBA, chrom=chrom, start=start, end=end)
         outputVCF(resultAB, vcf_handles[0], args.outdir) 
         outputVCF(resultBA, vcf_handles[1], args.outdir)
 
@@ -638,7 +622,7 @@ def parseVCFs(vcf_list, maskfile=None, truthvcf=None):
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
 
 def main(args):
-    parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth)
+    parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
@@ -646,6 +630,9 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mask', dest='maskfile', default=None, help='tabix-indexed BED file of masked intervals') 
     parser.add_argument('-o', '--outdir', dest='outdir', default=None, help='directory for output')
     parser.add_argument('-t', '--truth', dest='truth', default=None, help='also compare results to a "truth" VCF (should be sorted and tabix-indexed)')
+    parser.add_argument('-c', '--chrom', dest='chrom', default=None, help='limit to one chromosome')
+    parser.add_argument('-s', '--start', dest='start', default=0, help='start position')
+    parser.add_argument('-e', '--end', dest='end', default=int(1e9), help='end position') 
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
     # TODO add option for tabix output
 
