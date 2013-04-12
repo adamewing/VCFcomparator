@@ -9,13 +9,11 @@ Contact: Adam Ewing (ewingad@soe.ucsc.edu)
 import vcf
 import pysam
 import argparse
-import gzip
 import sys
-import subprocess
 import time
-from re import search, sub
-from os.path import exists, basename
-from os import remove, makedirs
+import re
+import os
+import pp
 
 ## classes ##
 
@@ -268,6 +266,45 @@ class CNV (Variant):
             return self.interval_score()
         return 0.0
 
+class Segment:
+    ''' used for segmenting the genome into chunks for threading '''
+    def __init__(self, line=None):
+        self.chrom  = None
+        self.start  = None
+        self.end    = None
+        self.length = None
+
+        if line is not None:
+            self.line = line.strip()
+            c = line.strip().split()
+
+            self.chrom  = c[0]
+            self.length = int(c[1])
+            self.start  = 0
+            self.end    = int(c[1])
+
+    def __gt__(self, other):
+        return self.length > other.length
+
+    def __str__(self):
+        return self.chrom + ":" + str(self.start) + "-" + str(self.end) + " (" + str(self.length) + " bp)"
+
+    def left(self):
+        lseg = Segment()
+        lseg.chrom = self.chrom
+        lseg.start = self.start
+        lseg.end = self.start + int(self.length/2)
+        lseg.length = lseg.end - lseg.start
+        return lseg
+
+    def right(self):
+        rseg = Segment()
+        rseg.chrom = self.chrom
+        rseg.start = self.end - int(self.length/2)
+        rseg.end = self.end
+        rseg.length = rseg.end - rseg.start
+        return rseg
+
 ## functions ##
 
 def get_conf_interval(rec, w_indel=0):
@@ -376,8 +413,8 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
         if verbose:
             if recnum % 10000 == 0:
                 localtime = time.asctime(time.localtime(time.time()))
-                sys.stderr.write(str(localtime) + ": " + basename(h_vcfA.filename) + " vs " 
-                                 + basename(h_interval_vcfB.filename) + ": " + str(recnum) 
+                sys.stderr.write(str(localtime) + ": " + os.path.basename(h_vcfA.filename) + " vs " 
+                                 + os.path.basename(h_interval_vcfB.filename) + ": " + str(recnum) 
                                  + " records compared, pos: " + str(recA.CHROM) + ":"
                                  + str(recA.POS) + " masked: " + str(nskip) + "\n")
 
@@ -457,16 +494,16 @@ def orientSV(alt):
     '''
     orient = alt # return info line by default
 
-    if search('^[A-Z]\[',alt):
+    if re.search('^[A-Z]\[',alt):
         orient = 'right_of_p_after_t'
 
-    elif search('^[A-Z]\]',alt):
+    elif re.search('^[A-Z]\]',alt):
         orient = 'left_of_p_after_t'
 
-    elif search('^\]',alt):
+    elif re.search('^\]',alt):
         orient = 'left_of_p_before_t'
 
-    elif search('^\[',alt):
+    elif re.search('^\[',alt):
         orient = 'right_of_p_before_t'
 
     return orient
@@ -513,61 +550,41 @@ def summary(compAB, compBA, outfile=None, chrom=None, start=None, end=None):
     if outfile:
         f.close()
 
-def outputVCF(comparison, inVCFhandle, outdir):
+def outputVCF(comparison_list, inVCFhandle, outdir):
     ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A'''
-    ifname = basename(inVCFhandle.filename)
+    ifname = os.path.basename(inVCFhandle.filename)
     assert ifname.endswith('.vcf.gz')
 
     if outdir is not None:
-        if not exists(outdir):
+        if not os.path.exists(outdir):
             sys.stderr.write("creating output directory: " + outdir + "\n")
-            makedirs(outdir)
+            os.makedirs(outdir)
         ifname = outdir + '/' + ifname
 
-    ofname_match = sub('vcf.gz$', 'matched.vcf', ifname)
+    ofname_match = re.sub('vcf.gz$', 'matched.vcf', ifname)
     vcfout_match   = vcf.Writer(file(ofname_match, 'w'), inVCFhandle)
 
-    ofname_unmatch = sub('vcf.gz$', 'unmatched.vcf', ifname)
+    ofname_unmatch = re.sub('vcf.gz$', 'unmatched.vcf', ifname)
     vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
 
-    vars = {}
-    for vtype in comparison.vartype.keys():
-        for var in comparison.vartype[vtype]:
-            f_loc = float(var.recA.POS)
+    match = 0
+    unmatch = 0
 
-            # make sure key is unique FIXME
-            while f_loc in vars:
-                f_loc += 0.001 # hopefully there aren't 1000 records with the same POS...
-            vars[f_loc] = var
+    for comparison in comparison_list:
+        for vtype in comparison.vartype.keys():
+            for var in comparison.vartype[vtype]:
+                if var.matched():
+                    vcfout_match.write_record(var.recA)
+                    match += 1
+                else:
+                    vcfout_unmatch.write_record(var.recA)
+                    unmatch +=1
 
-    vkeys = vars.keys()
-    vkeys.sort()
-
-    # write VCF records for matched and unmatched variants
-    for key in vkeys:
-        if vars[key].matched():
-            vcfout_match.write_record(vars[key].recA)
-        else:
-            vcfout_unmatch.write_record(vars[key].recA)
+    print ofname_match + ":", match
+    print ofname_unmatch + ":", unmatch
 
     vcfout_match.close()
     vcfout_unmatch.close()
-
-    gzipfile(ofname_match, delete_original=True)
-    gzipfile(ofname_unmatch, delete_original=True)
-
-def tabixfile(filename, delete_original=False):
-    pass
-
-def gzipfile(filename, delete_original=False):
-    outfile = gzip.open(filename + '.gz', 'wb')
-    with open(filename, 'r') as infile:
-        for line in infile:
-            outfile.write(line)
-    outfile.close()
-
-    if delete_original:
-        remove(filename)
 
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
@@ -582,7 +599,7 @@ def openVCFs(vcf_list):
 
     return vcf_handles
 
-def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, end=None):
+def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, end=None, verbose=False):
     ''' handle the list of vcf files and handle errors '''
     assert len(vcf_list) == 2
     vcf_handles = openVCFs(vcf_list) 
@@ -607,24 +624,80 @@ def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, en
     # compare VCFs
     try:
         sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
-        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
+        resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
         sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=args.verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
 
-        # output
-        summary(resultAB, resultBA, chrom=chrom, start=start, end=end)
-        outputVCF(resultAB, vcf_handles[0], args.outdir) 
-        outputVCF(resultBA, vcf_handles[1], args.outdir)
+        return resultAB, resultBA, vcf_handles
 
     except ValueError as e:
         sys.stderr.write('error while comparing vcfs: ' + str(e) + '\n')
 
+def split_genome(chroms, n, minlen=1e6, verbose=False):
+    ''' used externally, repeatedly split the largest segment, repect chromosome boundaries '''
+    assert n > 0
+    segs = []
+    with open(chroms, 'r') as chromfile:
+        for line in chromfile:
+            seg = Segment(line=line)
+            if seg.length > minlen:
+                segs.append(seg)
+
+    segs.sort()
+
+    # break the longest chunk in half until we have enough
+    while n > len(segs):
+        bigseg = segs.pop()
+        segs.append(bigseg.left())
+        segs.append(bigseg.right())
+        segs.sort()
+
+    assert n <= len(segs)
+
+    jobs = []
+    for i in range(n):
+        jobs.append([])
+
+    while len(segs) > 0:
+        for j in range(n):
+            if len(segs) == 0:
+                break
+            jobs[j].append(segs.pop())
+
+    if verbose:
+        print "-"*60
+        print "segmented into",n,"jobs:"
+        for i in range(len(jobs)):
+            print "job",str(i) + ":",','.join(map(str,jobs[i]))
+        print "-"*60
+
+    return jobs
+
+def runList(args, seg_list):
+    ''' used by external script to parallelize jobs '''    
+    resultsAB = []
+    resultsBA = []
+    vcf_handles = None
+
+    for seg in seg_list: # Segment
+        resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=seg.chrom, start=seg.start, end=seg.end, verbose=args.verbose)
+        resultsAB.append(resultAB)
+        resultsBA.append(resultBA)
+        summary(resultAB, resultBA, chrom=seg.chrom, start=seg.start, end=seg.end)
+
+    return resultsAB, resultsBA, vcf_handles
+
 def main(args):
-    parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end))
+    resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end), verbose=args.verbose)
+
+    summary(resultAB, resultBA, chrom=args.chrom, start=args.start, end=args.end)
+    outputVCF([resultAB], vcf_handles[0], args.outdir)
+    outputVCF([resultBA], vcf_handles[1], args.outdir)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
@@ -636,7 +709,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--start', dest='start', default=0, help='start position')
     parser.add_argument('-e', '--end', dest='end', default=int(1e9), help='end position') 
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
-    # TODO add option for tabix output
-
     args = parser.parse_args()
     main(args)
+
+
