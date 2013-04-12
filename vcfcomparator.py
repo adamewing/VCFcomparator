@@ -69,20 +69,17 @@ class Comparison:
         ''' count number of matches that pass and disagree on somatic status given variant type '''
         return reduce(lambda x, y: x+(y.matched() and y.both_pass() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
 
-    def count_agree_pass(self,vtype):
+    def count_agree_pass(self,vtype): # not useful?
         ''' count number of matches that agree on passing filters given variant type'''
         return reduce(lambda x, y: x+y.both_pass(), self.vartype[vtype], 0)
 
-    def count_agree_fail(self,vtype):
+    def count_agree_fail(self,vtype): # not useful?
         ''' count number of matches that agree on not passing filters given variant type '''
         return reduce(lambda x, y: x+(y.has_pass()==False), self.vartype[vtype], 0)
 
-    def count_disagree_pass(self,vtype):
+    def count_disagree_pass(self,vtype): 
        ''' count number of matches where one call passed and the other did not given variant type '''
        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[vtype], 0)
-
-    def count_total_somatic(self, vtype):
-       return reduce(lambda  x, y: x+y.has_somatic(), self.vartype[vtype], 0)
 
     def sum_scores(self,vtype):
         ''' return sum of all scores for variant type '''
@@ -142,6 +139,11 @@ class Variant:
 
     def matched(self):
         if self.recA and self.recB:
+            return True
+        return False
+
+    def truthed(self):
+        if self.recT:
             return True
         return False
 
@@ -597,7 +599,7 @@ def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, en
     tabix_truth = None
     if truthvcf is not None:
         try:
-            tabix_truth = openVCFs(list(truthvcf))[0]
+            tabix_truth = openVCFs([truthvcf])[0]
         except:
             sys.stderr.write("could not read mask: " + truthvcf + "  is it a tabix-indexed bgzipped VCF?\n")
             sys.exit()
