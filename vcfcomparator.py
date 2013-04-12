@@ -9,6 +9,7 @@ Contact: Adam Ewing (ewingad@soe.ucsc.edu)
 import vcf
 import pysam
 import argparse
+import itertools
 import sys
 import time
 import re
@@ -508,7 +509,7 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB, compBA, outfile=None, chrom=None, start=None, end=None):
+def summary(compAB_list, compBA_list, outfile=None, chrom=None, start=None, end=None):
     ''' given A --> B comparison and B --> A comparison, output summary stats to outfile, or to stdout if outfile=None '''
 
     out = []
@@ -516,32 +517,41 @@ def summary(compAB, compBA, outfile=None, chrom=None, start=None, end=None):
                          'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
                          'B_pass_disagree_somatic')))
 
-    for vtype in compAB.vartype.keys():
-        assert compBA.vartype.has_key(vtype)
+    for vtype in compAB_list[0].vartype.keys():
+        assert compBA_list[0].vartype.has_key(vtype)
 
-        n_shared_AB = compAB.matched(vtype)
-        n_shared_BA = compBA.matched(vtype)
-
-        if n_shared_AB != n_shared_BA:
-            if chrom is not None:
-                sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
- 
-            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
-                             ") using A-->B\n")
-
-        n_only_A_somatic  = compAB.unmatched_somatic(vtype)
-        n_only_B_somatic  = compBA.unmatched_somatic(vtype)
-        n_only_A_germline = compAB.unmatched_germline(vtype)
-        n_only_B_germline = compBA.unmatched_germline(vtype)
-        n_agree_som       = compAB.count_agree_somatic(vtype)
-        n_agree_germ      = compAB.count_agree_germline(vtype)
-        n_disagree_som_A  = compAB.count_disagree_somatic(vtype)
-        n_disagree_som_B  = compBA.count_disagree_somatic(vtype)
+        n_only_A_somatic  = 0 
+        n_only_B_somatic  = 0
+        n_only_A_germline = 0
+        n_only_B_germline = 0
+        n_agree_som       = 0
+        n_agree_germ      = 0
+        n_disagree_som_A  = 0
+        n_disagree_som_B  = 0
+        n_shared_AB       = 0
+        n_shared_BA       = 0
+    
+        for compAB, compBA in itertools.izip(compAB_list, compBA_list):
+            n_shared_AB       += compAB.matched(vtype)
+            n_shared_BA       += compBA.matched(vtype)
+            n_only_A_somatic  += compAB.unmatched_somatic(vtype)
+            n_only_B_somatic  += compBA.unmatched_somatic(vtype)
+            n_only_A_germline += compAB.unmatched_germline(vtype)
+            n_only_B_germline += compBA.unmatched_germline(vtype)
+            n_agree_som       += compAB.count_agree_somatic(vtype)
+            n_agree_germ      += compAB.count_agree_germline(vtype)
+            n_disagree_som_A  += compAB.count_disagree_somatic(vtype)
+            n_disagree_som_B  += compBA.count_disagree_somatic(vtype)
 
         outstr = map(str, (chrom, start, end, vtype, n_only_A_somatic, n_only_A_germline, n_only_B_somatic, n_only_B_germline, 
                            n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B))
-
         out.append(' '.join(outstr))
+
+    if n_shared_AB != n_shared_BA:
+        if chrom is not None:
+            sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
+            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
+                             ") using A-->B\n")
 
     f = sys.stdout
     if outfile:
@@ -687,14 +697,14 @@ def runList(args, seg_list):
         resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=seg.chrom, start=seg.start, end=seg.end, verbose=args.verbose)
         resultsAB.append(resultAB)
         resultsBA.append(resultBA)
-        summary(resultAB, resultBA, chrom=seg.chrom, start=seg.start, end=seg.end)
+        if args.verbose:
+            summary([resultAB], [resultBA], chrom=seg.chrom, start=seg.start, end=seg.end)
 
     return resultsAB, resultsBA, vcf_handles
 
 def main(args):
     resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end), verbose=args.verbose)
-
-    summary(resultAB, resultBA, chrom=args.chrom, start=args.start, end=args.end)
+    summary([resultAB], [resultBA], chrom=args.chrom, start=args.start, end=args.end)
     outputVCF([resultAB], vcf_handles[0], args.outdir)
     outputVCF([resultBA], vcf_handles[1], args.outdir)
 
