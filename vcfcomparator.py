@@ -560,8 +560,9 @@ def summary(compAB_list, compBA_list, outfile=None, chrom=None, start=None, end=
     if outfile:
         f.close()
 
-def outputVCF(comparison_list, inVCFhandle, outdir):
-    ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A'''
+def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
+    ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A '''
+    ''' if outbasename is not None, output goes into tempfile.vcf, otherwise filename is derived from inVCFhandle '''
     ifname = os.path.basename(inVCFhandle.filename)
     assert ifname.endswith('.vcf.gz')
 
@@ -576,6 +577,10 @@ def outputVCF(comparison_list, inVCFhandle, outdir):
 
     ofname_unmatch = re.sub('vcf.gz$', 'unmatched.vcf', ifname)
     vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
+
+    if outbasename is not None:
+        vcfout_match   = outbasename + ".vcf"
+        vcfout_unmatch = outbasename + ".vcf"
 
     match = 0
     unmatch = 0
@@ -699,7 +704,8 @@ def runList(args, seg_list):
         resultsBA.append(resultBA)
         if args.verbose:
             summary([resultAB], [resultBA], chrom=seg.chrom, start=seg.start, end=seg.end)
-
+    
+    results.append((resultsAB, resultsBA, vcf_handles))
     return resultsAB, resultsBA, vcf_handles
 
 def main(args):
