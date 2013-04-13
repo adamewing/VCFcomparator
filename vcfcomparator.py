@@ -579,8 +579,8 @@ def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
     vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
 
     if outbasename is not None:
-        vcfout_match   = outbasename + ".vcf"
-        vcfout_unmatch = outbasename + ".vcf"
+        vcfout_match   = outbasename + ".matched.vcf"
+        vcfout_unmatch = outbasename + ".unmatched.vcf"
 
     match = 0
     unmatch = 0
