@@ -573,14 +573,14 @@ def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
         ifname = outdir + '/' + ifname
 
     ofname_match = re.sub('vcf.gz$', 'matched.vcf', ifname)
-    vcfout_match   = vcf.Writer(file(ofname_match, 'w'), inVCFhandle)
-
     ofname_unmatch = re.sub('vcf.gz$', 'unmatched.vcf', ifname)
-    vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
 
     if outbasename is not None:
-        vcfout_match   = outbasename + ".matched.vcf"
-        vcfout_unmatch = outbasename + ".unmatched.vcf"
+        ofname_match   = outbasename + ".matched.vcf"
+        ofname_unmatch = outbasename + ".unmatched.vcf"
+
+    vcfout_unmatch = vcf.Writer(file(ofname_unmatch, 'w'), inVCFhandle)
+    vcfout_match   = vcf.Writer(file(ofname_match, 'w'), inVCFhandle)
 
     match = 0
     unmatch = 0
