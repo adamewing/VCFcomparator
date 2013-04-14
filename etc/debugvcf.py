@@ -34,6 +34,7 @@ if len(sys.argv) == 2:
     try:
         use_info_somatic = False
         use_info_ss = False
+        use_info_loh = False
         use_fmt_ss = False
         use_filter_somatic = False
         indel_count = 0
@@ -46,8 +47,10 @@ if len(sys.argv) == 2:
                 use_filter_somatic = True
             if rec.INFO.get('SOMATIC'):
                 use_info_somatic=True
-            if rec.INFO.get('SS'):
+            if str(rec.INFO.get('SS')).upper() == 'SOMATIC':
                 use_info_ss=True
+            if str(rec.INFO.get('SS')).upper() == 'LOH':
+                use_info_loh=True
 
             assert not (rec.is_snp and rec.is_indel and rec.is_sv)
             if rec.is_snp:
@@ -66,6 +69,7 @@ if len(sys.argv) == 2:
         print "-"*60
         print "uses INFO/SOMATIC:", use_info_somatic
         print "uses INFO/SS=Somatic/Germline:", use_info_ss
+        print "uses INFO/SS=LOH:",use_info_loh
         print "uses FORMAT/SS=0,1,2,...:", use_fmt_ss
         print "uses FILTER/SOMATIC (please correct if true, filter should be PASS or filter name):", use_filter_somatic
         print "-"*60

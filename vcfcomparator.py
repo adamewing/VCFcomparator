@@ -141,7 +141,7 @@ class Variant:
             return True
         return False
 
-    def truthed(self):
+    def is_true(self):
         if self.recT:
             return True
         return False
@@ -152,6 +152,8 @@ class Variant:
             return True
 
         if self.recA.INFO.get('SOMATIC'):
+            if str(self.recA.INFO.get('SS')).upper() == 'LOH':
+                return False
             return True
 
         if self.somatic_in_format(self.recA):
@@ -242,7 +244,6 @@ class SNV (Variant):
         if self.matched():
             return 1.0
         return 0.0
-
 
 class INDEL (Variant):
     ''' short insertion/deletion subclass '''
