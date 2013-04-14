@@ -2,8 +2,35 @@
 
 import argparse
 import vcf
+import sys
 import vcfcomparator as vc
 from multiprocessing import Process, Queue
+from re import sub
+from os import remove
+from os.path import basename
+
+def merge_vcfs(files, outname, outdir=None, verbose=False):
+    assert len(files) > 0
+    assert outname.endswith('vcf')
+
+    if outdir is None:
+        outname  = basename(outname)
+    else:
+        outname = outdir + "/" + basename(outname)
+
+    template = vcf.Reader(filename=files[0])
+    vcfout   = vcf.Writer(file(outname, 'w'), template)
+
+    for infile in files:
+        assert infile.endswith('vcf')
+        sys.stderr.write("merging " + infile + " into " + outname + "\n")
+        vcfin = vcf.Reader(filename=infile)
+        for rec in vcfin:
+            vcfout.write_record(rec)
+    vcfout.close()
+
+    for infile in files:
+        remove(infile)
 
 def main(args):
     np = int(args.procs)
@@ -14,11 +41,14 @@ def main(args):
 
     processes = []
     seglists = vc.split_genome(args.fai, np, verbose=args.verbose)
+
     result_queue = Queue()
+    vcfA_queue = Queue()
+    vcfB_queue = Queue()
 
     segnum = 0
     for seglist in seglists:
-        processes.append(Process(target=vc.runList, args=(result_queue, args, seglist, segnum)))
+        processes.append(Process(target=vc.runList, args=(result_queue, vcfA_queue, vcfB_queue, args, seglist, segnum)))
         segnum += 1
 
     for p in processes:
@@ -36,9 +66,36 @@ def main(args):
             else:
                 summaries[vtype].add(s[vtype])
 
+    print "-"*60
     vc.print_sumheader()
     for vtype in summaries.keys():
         print summaries[vtype]
+    print "-"*60
+
+    vcfA_matched_files   = []
+    vcfA_unmatched_files = []
+    vcfB_matched_files   = []
+    vcfB_unmatched_files = []
+
+    vcfA_matched_outname   = sub('vcf.gz$', 'matched.vcf', args.vcf[0])
+    vcfA_unmatched_outname = sub('vcf.gz$', 'unmatched.vcf', args.vcf[0])
+    vcfB_matched_outname   = sub('vcf.gz$', 'matched.vcf', args.vcf[1])
+    vcfB_unmatched_outname = sub('vcf.gz$', 'unmatched.vcf', args.vcf[1])
+
+    sys.stderr.write("merging VCFs...\n")
+
+    for _ in range(np):
+        vcfA_matched, vcfA_unmatched = vcfA_queue.get()
+        vcfB_matched, vcfB_unmatched = vcfB_queue.get()
+        vcfA_matched_files.append(vcfA_matched)
+        vcfA_unmatched_files.append(vcfA_unmatched)
+        vcfB_matched_files.append(vcfB_matched)
+        vcfB_unmatched_files.append(vcfB_unmatched)
+
+    merge_vcfs(vcfA_matched_files, vcfA_matched_outname, outdir=args.outdir, verbose=args.verbose)
+    merge_vcfs(vcfA_unmatched_files, vcfA_unmatched_outname, outdir=args.outdir, verbose=args.verbose)
+    merge_vcfs(vcfB_matched_files, vcfB_matched_outname, outdir=args.outdir, verbose=args.verbose)
+    merge_vcfs(vcfB_unmatched_files, vcfB_unmatched_outname, outdir=args.outdir, verbose=args.verbose)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')

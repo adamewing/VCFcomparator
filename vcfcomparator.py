@@ -621,11 +621,13 @@ def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
                     vcfout_unmatch.write_record(var.recA)
                     unmatch +=1
 
-    print ofname_match + ":", match
-    print ofname_unmatch + ":", unmatch
+    #print ofname_match + ":", match
+    #print ofname_unmatch + ":", unmatch
 
     vcfout_match.close()
     vcfout_unmatch.close()
+
+    return ofname_match, ofname_unmatch
 
 def openVCFs(vcf_list):
     ''' return list of vcf file handles '''
@@ -664,15 +666,22 @@ def parseVCFs(vcf_list, maskfile=None, truthvcf=None, chrom=None, start=None, en
             
     # compare VCFs
     try:
-        sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
+        if chrom is None:
+            sys.stderr.write(vcf_list[0] + " --> " + vcf_list[1] + "\n")
+        else:
+            sys.stderr.write(chrom + ":" + str(start) + "-" + str(end) + ": " + vcf_list[0] + " --> " + vcf_list[1] + "\n")
+
         resultAB = compareVCFs(vcf_handles[0], vcf_handles[1], verbose=verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
 
         # reload vcfs to reset iteration
         vcf_handles = openVCFs(vcf_list) 
 
-        sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
-        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
+        if chrom is None:
+            sys.stderr.write(vcf_list[1] + " --> " + vcf_list[0] + "\n")
+        else:
+            sys.stderr.write(chrom + ":" + str(start) + "-" + str(end) + ": " + vcf_list[1] + " --> " + vcf_list[0] + "\n")
 
+        resultBA = compareVCFs(vcf_handles[1], vcf_handles[0], verbose=verbose, mask=tabix_mask, truth=tabix_truth, chrom=chrom, fetch_start=start, fetch_end=end)
         return resultAB, resultBA, vcf_handles
 
     except ValueError as e:
@@ -718,7 +727,7 @@ def split_genome(chroms, n, minlen=1e6, verbose=False):
 
     return jobs
 
-def runList(result_queue, args, seg_list, vcftag):
+def runList(result_queue, vcfA_queue, vcfB_queue, args, seg_list, vcftag):
     ''' used by external script to parallelize jobs, vcftag will be appended to VCF output basename '''    
     resultsAB = []
     resultsBA = []
@@ -735,11 +744,13 @@ def runList(result_queue, args, seg_list, vcftag):
     basenameA = os.path.basename(vcf_handles[0].filename) + "." + vcftag
     basenameB = os.path.basename(vcf_handles[1].filename) + "." + vcftag
 
-    outputVCF(resultsAB, vcf_handles[0], args.outdir, outbasename=basenameA)
-    outputVCF(resultsBA, vcf_handles[1], args.outdir, outbasename=basenameB)
+    vcfA_names = outputVCF(resultsAB, vcf_handles[0], args.outdir, outbasename=basenameA)
+    vcfB_names = outputVCF(resultsBA, vcf_handles[1], args.outdir, outbasename=basenameB)
     s = summary(resultsAB, resultsBA)
     
     result_queue.put(s)
+    vcfA_queue.put(vcfA_names)
+    vcfB_queue.put(vcfB_names)
 
 def main(args):
     resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end), verbose=args.verbose)
