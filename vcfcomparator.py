@@ -598,6 +598,9 @@ def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
             os.makedirs(outdir)
         ifname = outdir + '/' + ifname
 
+        if outbasename is not None:
+            outbasename = outdir + '/' + outbasename
+
     ofname_match = re.sub('vcf.gz$', 'matched.vcf', ifname)
     ofname_unmatch = re.sub('vcf.gz$', 'unmatched.vcf', ifname)
 
@@ -620,9 +623,6 @@ def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
                 else:
                     vcfout_unmatch.write_record(var.recA)
                     unmatch +=1
-
-    #print ofname_match + ":", match
-    #print ofname_unmatch + ":", unmatch
 
     vcfout_match.close()
     vcfout_unmatch.close()
