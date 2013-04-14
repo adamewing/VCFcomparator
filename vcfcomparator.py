@@ -306,6 +306,44 @@ class Segment:
         rseg.length = rseg.end - rseg.start
         return rseg
 
+class Summary:
+    def __init__(self):
+        self.n_only_A_somatic  = 0 
+        self.n_only_B_somatic  = 0
+        self.n_only_A_germline = 0
+        self.n_only_B_germline = 0
+        self.n_agree_som       = 0
+        self.n_agree_germ      = 0
+        self.n_disagree_som_A  = 0
+        self.n_disagree_som_B  = 0
+        self.n_shared_AB       = 0
+        self.n_shared_BA       = 0
+
+        self.vtype = None
+        self.chrom = None
+        self.start = None
+        self.end   = None
+
+    def add(self, other):
+        assert self.vtype == other.vtype
+        self.n_only_A_somatic  += other.n_only_A_somatic
+        self.n_only_B_somatic  += other.n_only_B_somatic
+        self.n_only_A_germline += other.n_only_A_germline
+        self.n_only_B_germline += other.n_only_B_germline
+        self.n_agree_som       += other.n_agree_som
+        self.n_agree_germ      += other.n_agree_germ
+        self.n_disagree_som_A  += other.n_disagree_som_A
+        self.n_disagree_som_B  += other.n_disagree_som_B
+        self.n_shared_AB       += other.n_shared_AB
+        self.n_shared_BA       += other.n_shared_BA
+
+    def __str__(self):
+        outstr = map(str, (self.chrom, self.start, self.end, self.vtype, self.n_only_A_somatic, self.n_only_A_germline, 
+                           self.n_only_B_somatic, self.n_only_B_germline, self.n_agree_som, self.n_agree_germ, 
+                           self.n_disagree_som_A, self.n_disagree_som_B))
+        return ' '.join(outstr)
+
+
 ## functions ##
 
 def get_conf_interval(rec, w_indel=0):
@@ -509,56 +547,44 @@ def orientSV(alt):
 
     return orient
 
-def summary(compAB_list, compBA_list, outfile=None, chrom=None, start=None, end=None):
-    ''' given A --> B comparison and B --> A comparison, output summary stats to outfile, or to stdout if outfile=None '''
+def print_sumheader():
+    ''' summarize A --> B comparison and B --> A comparison '''
+    print ' '.join(('chrom','start','end','vtype','A_only_pass_somatic','A_only_pass_germline', 'B_only_pass_somatic',
+                    'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
+                    'B_pass_disagree_somatic'))
 
-    out = []
-    out.append(' '.join(('chrom','start','end','vtype','A_only_pass_somatic','A_only_pass_germline', 'B_only_pass_somatic',
-                         'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
-                         'B_pass_disagree_somatic')))
+def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
+    ''' summarize A --> B comparison and B --> A comparison '''
+    s = {}
 
     for vtype in compAB_list[0].vartype.keys():
         assert compBA_list[0].vartype.has_key(vtype)
-
-        n_only_A_somatic  = 0 
-        n_only_B_somatic  = 0
-        n_only_A_germline = 0
-        n_only_B_germline = 0
-        n_agree_som       = 0
-        n_agree_germ      = 0
-        n_disagree_som_A  = 0
-        n_disagree_som_B  = 0
-        n_shared_AB       = 0
-        n_shared_BA       = 0
-    
+        s[vtype] = Summary()
+        s[vtype].chrom = chrom
+        s[vtype].start = start
+        s[vtype].end   = end
+        s[vtype].vtype = vtype   
+ 
         for compAB, compBA in itertools.izip(compAB_list, compBA_list):
-            n_shared_AB       += compAB.matched(vtype)
-            n_shared_BA       += compBA.matched(vtype)
-            n_only_A_somatic  += compAB.unmatched_somatic(vtype)
-            n_only_B_somatic  += compBA.unmatched_somatic(vtype)
-            n_only_A_germline += compAB.unmatched_germline(vtype)
-            n_only_B_germline += compBA.unmatched_germline(vtype)
-            n_agree_som       += compAB.count_agree_somatic(vtype)
-            n_agree_germ      += compAB.count_agree_germline(vtype)
-            n_disagree_som_A  += compAB.count_disagree_somatic(vtype)
-            n_disagree_som_B  += compBA.count_disagree_somatic(vtype)
+            s[vtype].n_shared_AB       += compAB.matched(vtype)
+            s[vtype].n_shared_BA       += compBA.matched(vtype)
+            s[vtype].n_only_A_somatic  += compAB.unmatched_somatic(vtype)
+            s[vtype].n_only_B_somatic  += compBA.unmatched_somatic(vtype)
+            s[vtype].n_only_A_germline += compAB.unmatched_germline(vtype)
+            s[vtype].n_only_B_germline += compBA.unmatched_germline(vtype)
+            s[vtype].n_agree_som       += compAB.count_agree_somatic(vtype)
+            s[vtype].n_agree_germ      += compAB.count_agree_germline(vtype)
+            s[vtype].n_disagree_som_A  += compAB.count_disagree_somatic(vtype)
+            s[vtype].n_disagree_som_B  += compBA.count_disagree_somatic(vtype)
 
-        outstr = map(str, (chrom, start, end, vtype, n_only_A_somatic, n_only_A_germline, n_only_B_somatic, n_only_B_germline, 
-                           n_agree_som, n_agree_germ, n_disagree_som_A, n_disagree_som_B))
-        out.append(' '.join(outstr))
-
-    if n_shared_AB != n_shared_BA:
-        if chrom is not None:
-            sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
-            sys.stderr.write("warning: overlap was not symmetric (A-->B: " + str(n_shared_AB) + "), (B-->A: " + str(n_shared_BA) + 
-                             ") using A-->B\n")
-
-    f = sys.stdout
-    if outfile:
-        f = open(outfile, 'w')
-    f.write('\n'.join(out) + "\n")
-    if outfile:
-        f.close()
+    for vtype in s.keys():
+        if s[vtype].n_shared_AB != s[vtype].n_shared_BA:
+            if chrom is not None:
+                sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
+                sys.stderr.write("warning: overlap was not symmetric for " + vtype)
+                sys.stderr.write(" (A-->B: " + str(s[vtype].n_shared_AB) + "),") 
+                sys.stderr.write(" (B-->A: " + str(s[vtype].n_shared_BA) + ") using A-->B\n")
+    return s
 
 def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
     ''' write VCF files for matched and unmatched records, for matched variants, output the record from sample A '''
@@ -692,11 +718,12 @@ def split_genome(chroms, n, minlen=1e6, verbose=False):
 
     return jobs
 
-def runList(args, seg_list):
-    ''' used by external script to parallelize jobs '''    
+def runList(result_queue, args, seg_list, vcftag):
+    ''' used by external script to parallelize jobs, vcftag will be appended to VCF output basename '''    
     resultsAB = []
     resultsBA = []
     vcf_handles = None
+    vcftag = str(vcftag)
 
     for seg in seg_list: # Segment
         resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=seg.chrom, start=seg.start, end=seg.end, verbose=args.verbose)
@@ -704,16 +731,25 @@ def runList(args, seg_list):
         resultsBA.append(resultBA)
         if args.verbose:
             summary([resultAB], [resultBA], chrom=seg.chrom, start=seg.start, end=seg.end)
+
+    basenameA = os.path.basename(vcf_handles[0].filename) + "." + vcftag
+    basenameB = os.path.basename(vcf_handles[1].filename) + "." + vcftag
+
+    outputVCF(resultsAB, vcf_handles[0], args.outdir, outbasename=basenameA)
+    outputVCF(resultsBA, vcf_handles[1], args.outdir, outbasename=basenameB)
+    s = summary(resultsAB, resultsBA)
     
-    results.append((resultsAB, resultsBA, vcf_handles))
-    return resultsAB, resultsBA, vcf_handles
+    result_queue.put(s)
 
 def main(args):
     resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end), verbose=args.verbose)
-    summary([resultAB], [resultBA], chrom=args.chrom, start=args.start, end=args.end)
     outputVCF([resultAB], vcf_handles[0], args.outdir)
     outputVCF([resultBA], vcf_handles[1], args.outdir)
 
+    s = summary([resultAB], [resultBA], chrom=args.chrom, start=args.start, end=args.end)
+    print_sumheader()
+    for vartype in s.keys():
+        print s[vartype]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
