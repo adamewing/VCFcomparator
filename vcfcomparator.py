@@ -92,12 +92,20 @@ class Comparison:
         ''' count matched somatic variants that both pass filter and are present in truth file (i.e. true positives) '''
         return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
 
+    def count_match_pass_truth_germline(self,vtype):
+        ''' count matched germline variants that both pass filter and are present in truth file (i.e. consistently misclassified) '''
+        return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and not y.has_somatic()), self.vartype[vtype], 0)
+
     def count_match_disagree_truth_somatic(self,vtype):
-        ''' count matched somatic variants where one does not pass filter and are present in truth file (i.e. true positives) '''
+        ''' count matched somatic variants where one does not pass filter and are present in truth file (i.e. disagreement on true positives) '''
         return reduce(lambda x, y: x+(y.has_pass() and not y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
 
+    def count_match_pass_truth_disagree(self,vtype):
+        ''' count matched variants where both pass filter and are present in truth file but disagree on somatic vs. germline '''
+        return reduce(lambda x, y: x+(y.has_pass() and y.both_pass() and y.is_true() and y.matched() and not y.both_somatic()), self.vartype[vtype], 0)
+
     def count_unmatch_pass_truth_somatic(self,vtype):
-        ''' count unmatched somatic variants that pass filter and are present in truth file (i.e. true positives) '''
+        ''' count unmatched somatic variants that pass filter and are present in truth file (i.e. discordant true positives) '''
         return reduce(lambda x, y: x+(y.has_pass() and y.is_true() and not y.matched() and y.has_somatic()), self.vartype[vtype], 0)
 
     def count_unmatch_fail_truth_somatic(self,vtype):
@@ -356,6 +364,7 @@ class Summary:
         self.A_only_som_fail_truth = 0
         self.B_only_som_fail_truth = 0
         self.n_agree_som_truth     = 0
+        self.n_agree_germ_truth    = 0
         self.n_disagree_som_truth  = 0
 
         self.vtype = None
@@ -389,6 +398,7 @@ class Summary:
         self.A_only_som_fail_truth += other.A_only_som_fail_truth
         self.B_only_som_fail_truth += other.B_only_som_fail_truth
         self.n_agree_som_truth     += other.n_agree_som_truth
+        self.n_agree_germ_truth    += other.n_agree_germ_truth
         self.n_disagree_som_truth  += other.n_disagree_som_truth
 
     def __str__(self):
@@ -398,7 +408,7 @@ class Summary:
                            self.B_pass_truth_som, self.B_fail_truth_som, self.A_pass_truth_germ, self.A_fail_truth_germ,
                            self.B_pass_truth_germ, self.B_fail_truth_germ, self.A_only_som_pass_truth,
                            self.A_only_som_fail_truth, self.B_only_som_pass_truth, self.B_only_som_fail_truth, 
-                           self.n_agree_som_truth, self.n_disagree_som_truth))
+                           self.n_agree_som_truth, self.n_agree_germ_truth, self.n_disagree_som_truth))
         return ' '.join(outstr)
 
 
@@ -612,8 +622,9 @@ def print_sumheader():
                     'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
                     'B_pass_disagree_somatic', 'A_pass_truth_somatic', 'A_fail_truth_somatic', 'B_pass_truth_somatic',
                     'B_fail_truth_somatic', 'A_pass_truth_germline', 'A_fail_truth_germline', 'B_pass_truth_germline', 
-                    'B_fail_truth_germline', 'A_only_somatic_pass_truth', 'A_only_somatic_fail_truth', 'B_only_somatic_pass_truth', 
-                    'B_only_somatic_fail_truth', 'match_pass_somatic_truth', 'match_disagree_pass_somatic_truth'))
+                    'B_fail_truth_germline', 'A_only_somatic_pass_truth', 'A_only_somatic_fail_truth', 
+                    'B_only_somatic_pass_truth', 'B_only_somatic_fail_truth', 'match_pass_somatic_truth', 
+                    'match_pass_germline_truth', 'match_disagree_pass_somatic_truth'))
 
 def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
     ''' summarize A --> B comparison and B --> A comparison '''
@@ -652,6 +663,7 @@ def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
             s[vtype].A_only_som_fail_truth += compAB.count_unmatch_fail_truth_somatic(vtype)
             s[vtype].B_only_som_fail_truth += compBA.count_unmatch_fail_truth_somatic(vtype)
             s[vtype].n_agree_som_truth     += compAB.count_match_pass_truth_somatic(vtype)
+            s[vtype].n_agree_germ_truth    += compAB.count_match_pass_truth_germline(vtype)
             s[vtype].n_disagree_som_truth  += compAB.count_match_disagree_truth_somatic(vtype)
 
     for vtype in s.keys():
