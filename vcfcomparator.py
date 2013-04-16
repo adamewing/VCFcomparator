@@ -68,17 +68,33 @@ class Comparison:
         ''' count number of matches that pass and disagree on somatic status given variant type '''
         return reduce(lambda x, y: x+(y.matched() and y.both_pass() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
 
-    def count_agree_pass(self,vtype): # not useful?
-        ''' count number of matches that agree on passing filters given variant type'''
-        return reduce(lambda x, y: x+y.both_pass(), self.vartype[vtype], 0)
+    def count_disagree_pass_somatic(self,vtype): 
+        ''' count number of matches where one call passed and the other did not given variant type '''
+        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass() and y.both_somatic()), self.vartype[vtype], 0)
 
-    def count_agree_fail(self,vtype): # not useful?
-        ''' count number of matches that agree on not passing filters given variant type '''
-        return reduce(lambda x, y: x+(y.has_pass()==False), self.vartype[vtype], 0)
+    def count_fail_truth_somatic(self,vtype):
+        ''' count total number of variants that fail filter but are present in truth file (i.e. false negatives) '''
+        return reduce(lambda x, y: x+(not y.has_pass() and y.is_true()), self.vartype[vtype], 0)
 
-    def count_disagree_pass(self,vtype): 
-       ''' count number of matches where one call passed and the other did not given variant type '''
-       return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass()), self.vartype[vtype], 0)
+    def count_pass_truth_somatic(self,vtype):
+        ''' count total number of variants that pass filter and are present in truth file (i.e. true positives) '''
+        return reduce(lambda x, y: x+(y.has_pass() and y.is_true()), self.vartype[vtype], 0)
+
+    def count_match_pass_truth_somatic(self,vtype):
+        ''' count matched somatic variants that both pass filter and are present in truth file (i.e. true positives) '''
+        return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
+
+    def count_match_disagree_truth_somatic(self,vtype):
+        ''' count matched somatic variants where one does not pass filter and are present in truth file (i.e. true positives) '''
+        return reduce(lambda x, y: x+(y.has_pass() and not y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
+
+    def count_unmatch_pass_truth_somatic(self,vtype):
+        ''' count unmatched somatic variants that pass filter and are present in truth file (i.e. true positives) '''
+        return reduce(lambda x, y: x+(y.has_pass() and y.is_true() and not y.matched() and y.has_somatic()), self.vartype[vtype], 0)
+
+    def count_unmatch_fail_truth_somatic(self,vtype):
+        ''' count unmatched somatic variants that fail filter but are present in truth file (i.e. false negatives) '''
+        return reduce(lambda x, y: x+(not y.has_pass() and y.is_true() and not y.matched() and y.has_somatic()), self.vartype[vtype], 0)
 
     def sum_scores(self,vtype):
         ''' return sum of all scores for variant type '''
@@ -90,11 +106,10 @@ class Variant:
     def __init__(self, vcf_recA, vcf_recB):
         self.recA = vcf_recA
         self.recB = vcf_recB
+        self.recT = None # will be a VCF record if not None
 
         # if there is more than one match, the rest are stored here
         self.altmatch = []
-
-        self.truth = None # will be a VCF record if not None
 
     def __str__(self):
         return str(self.recA) + "\t" + str(self.recB)
@@ -142,7 +157,7 @@ class Variant:
         return False
 
     def is_true(self):
-        if self.recT:
+        if self.recT is not None:
             return True
         return False
 
@@ -320,6 +335,17 @@ class Summary:
         self.n_shared_AB       = 0
         self.n_shared_BA       = 0
 
+        self.A_pass_truth_som      = 0
+        self.B_pass_truth_som      = 0
+        self.A_fail_truth_som      = 0
+        self.B_fail_truth_som      = 0
+        self.A_only_som_pass_truth = 0
+        self.B_only_som_pass_truth = 0
+        self.A_only_som_fail_truth = 0
+        self.B_only_som_fail_truth = 0
+        self.n_agree_som_truth     = 0
+        self.n_disagree_som_truth  = 0
+
         self.vtype = None
         self.chrom = None
         self.start = None
@@ -338,10 +364,24 @@ class Summary:
         self.n_shared_AB       += other.n_shared_AB
         self.n_shared_BA       += other.n_shared_BA
 
+        self.A_pass_truth_som      += other.A_pass_truth_som
+        self.B_pass_truth_som      += other.B_pass_truth_som
+        self.A_fail_truth_som      += other.A_fail_truth_som
+        self.B_fail_truth_som      += other.B_fail_truth_som
+        self.A_only_som_pass_truth += other.A_only_som_pass_truth
+        self.B_only_som_pass_truth += other.B_only_som_pass_truth
+        self.A_only_som_fail_truth += other.A_only_som_fail_truth
+        self.B_only_som_fail_truth += other.B_only_som_fail_truth
+        self.n_agree_som_truth     += other.n_agree_som_truth
+        self.n_disagree_som_truth  += other.n_disagree_som_truth
+
     def __str__(self):
         outstr = map(str, (self.chrom, self.start, self.end, self.vtype, self.n_only_A_somatic, self.n_only_A_germline, 
                            self.n_only_B_somatic, self.n_only_B_germline, self.n_agree_som, self.n_agree_germ, 
-                           self.n_disagree_som_A, self.n_disagree_som_B))
+                           self.n_disagree_som_A, self.n_disagree_som_B, self.A_pass_truth_som, self.A_fail_truth_som,
+                           self.B_pass_truth_som, self.B_fail_truth_som, self.A_only_som_pass_truth,
+                           self.A_only_som_fail_truth, self.B_only_som_pass_truth, self.B_only_som_fail_truth, 
+                           self.n_agree_som_truth, self.n_disagree_som_truth))
         return ' '.join(outstr)
 
 
@@ -508,12 +548,13 @@ def compareVCFs(h_vcfA, h_interval_vcfB, verbose=False, w_indel=0, w_sv=1000, ma
 
             # compare to truth if present
             if truth is not None:
-                #try:
-                for recT in truth.fetch(recA.CHROM, w_start, w_end):
-                    if vcfVariantMatch(recA, recT):
-                        recA.truth = recT
-                #except:
-                #    sys.stderr.write(' '.join(("warning: truth VCF missing region:", str(recA.CHROM), str(w_start), str(w_end), "\n")))
+                n_missing_regions = 0
+                try:
+                    for recT in truth.fetch(recA.CHROM, w_start, w_end):
+                        if vcfVariantMatch(recA, recT):
+                            variant.recT = recT
+                except:
+                    n_missing_regions += 1
 
             cmp.vartype[vtype].append(variant)
 
@@ -552,7 +593,9 @@ def print_sumheader():
     ''' summarize A --> B comparison and B --> A comparison '''
     print ' '.join(('chrom','start','end','vtype','A_only_pass_somatic','A_only_pass_germline', 'B_only_pass_somatic',
                     'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
-                    'B_pass_disagree_somatic'))
+                    'B_pass_disagree_somatic', 'A_total_pass_truth', 'A_total_fail_truth', 'B_total_pass_truth',
+                    'B_total_fail_truth', 'A_only_somatic_pass_truth', 'A_only_somatic_fail_truth', 'B_only_somatic_pass_truth', 
+                    'B_only_somatic_fail_truth', 'match_pass_somatic_truth', 'match_disagree_pass_somatic_truth'))
 
 def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
     ''' summarize A --> B comparison and B --> A comparison '''
@@ -577,6 +620,18 @@ def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
             s[vtype].n_agree_germ      += compAB.count_agree_germline(vtype)
             s[vtype].n_disagree_som_A  += compAB.count_disagree_somatic(vtype)
             s[vtype].n_disagree_som_B  += compBA.count_disagree_somatic(vtype)
+
+            s[vtype].A_pass_truth_som      += compAB.count_pass_truth_somatic(vtype)
+            s[vtype].A_fail_truth_som      += compAB.count_fail_truth_somatic(vtype)
+            s[vtype].B_pass_truth_som      += compBA.count_pass_truth_somatic(vtype)
+            s[vtype].B_fail_truth_som      += compBA.count_fail_truth_somatic(vtype)
+            s[vtype].A_only_som_pass_truth += compAB.count_unmatch_pass_truth_somatic(vtype) 
+            s[vtype].B_only_som_pass_truth += compBA.count_unmatch_pass_truth_somatic(vtype)
+            s[vtype].A_only_som_fail_truth += compAB.count_unmatch_fail_truth_somatic(vtype)
+            s[vtype].B_only_som_fail_truth += compBA.count_unmatch_fail_truth_somatic(vtype)
+            s[vtype].n_agree_som_truth     += compAB.count_match_pass_truth_somatic(vtype)
+            s[vtype].n_disagree_som_truth  += compAB.count_match_disagree_truth_somatic(vtype)
+
 
     for vtype in s.keys():
         if s[vtype].n_shared_AB != s[vtype].n_shared_BA:
