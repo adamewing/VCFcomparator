@@ -15,6 +15,7 @@ import time
 import re
 import os
 import pp
+from collections import OrderedDict
 
 ## classes ##
 
@@ -26,95 +27,28 @@ class Comparison:
         self.vartype['SNV']   = []
         self.vartype['INDEL'] = []
         #self.vartype['CNV']   = []
-        self.vartype['SV']    = []
+        #self.vartype['SV']    = []
 
-    def matched(self, vtype):
-        ''' count number of matched variants of <vtype> that PASS '''
-        return reduce(lambda x, y: x+(y.matched() and y.both_pass()), self.vartype[vtype], 0)
+    def build_comparator(self, vtype, matched=False, passA=False, passB=False, somA=False, somB=False, truth=False):
+        if truth:
+            def countfunc(vtype):
+                return reduce(lambda x,y : x+( (y.matched() == matched) 
+                                                and (y.recA_pass() == passA) 
+                                                and (y.recB_pass() == passB) 
+                                                and (y.recA_somatic() == somA)
+                                                and (y.recB_somatic() == somB)
+                                                and (y.is_true() == truth)),
+                                                self.vartype[vtype], 0)
+        else:
+            def countfunc(vtype):
+                return reduce(lambda x,y : x+( (y.matched() == matched) 
+                                                and (y.recA_pass() == passA) 
+                                                and (y.recB_pass() == passB) 
+                                                and (y.recA_somatic() == somA)
+                                                and (y.recB_somatic() == somB)),
+                                                self.vartype[vtype], 0)
+        return countfunc
 
-    def matched_any(self, vtype):
-        ''' count number of matched variants of <vtype> that PASS '''
-        return reduce(lambda x, y: x+y.matched(), self.vartype[vtype], 0)
-
-    def unmatched(self, vtype):
-        ''' count total number of unmatched variants of <vtype> that PASS '''
-        return reduce(lambda x, y: x+(not y.matched() and y.has_pass()), self.vartype[vtype], 0)
-
-    def unmatched_any(self, vtype):
-        ''' count total number of unmatched variants of <vtype> that PASS '''
-        return reduce(lambda x, y: x+(not y.matched()), self.vartype[vtype], 0)
-
-    def unmatched_germline(self, vtype):
-        ''' count number of unmatched germline variants of <vtype> that PASS'''
-        return reduce(lambda x, y: x+(not y.matched() and y.has_pass() and y.has_germline()), self.vartype[vtype], 0)
-
-    def unmatched_somatic(self,vtype):
-        ''' count number of unmatched somatic variants of <vtype> that PASS'''
-        return reduce(lambda x, y: x+(not y.matched() and y.has_pass() and y.has_somatic()), self.vartype[vtype], 0)
-
-    def altmatched(self,vtype):
-        ''' count number of alternate matches '''
-        return reduce(lambda x, y: x+len(y.altmatch), self.vartype[vtype], 0)
-
-    def count_agree_somatic(self,vtype):
-        ''' count number of matches that pass and agree on somatic status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.both_somatic() and y.both_pass()), self.vartype[vtype], 0)
-
-    def count_agree_germline(self,vtype):
-        ''' count number of matches that pass and agree on germline status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.both_germline() and y.both_pass()), self.vartype[vtype], 0)
-
-    def count_disagree_somatic(self,vtype):
-        ''' count number of matches that pass and disagree on somatic status given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.both_pass() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
-
-    def count_disagree_pass_somatic(self,vtype): 
-        ''' count number of matches where one call passed and the other did not given variant type '''
-        return reduce(lambda x, y: x+(y.matched() and y.has_pass() and not y.both_pass() and y.both_somatic()), self.vartype[vtype], 0)
-
-    def count_fail_truth_somatic(self,vtype):
-        ''' count total number of somatic variants that fail filter but are present in truth file (i.e. false negatives) '''
-        return reduce(lambda x, y: x+(not y.has_pass() and y.is_true()), self.vartype[vtype], 0)
-
-    def count_pass_truth_somatic(self,vtype):
-        ''' count total number of somatic variants that pass filter and are present in truth file (i.e. true positives) '''
-        return reduce(lambda x, y: x+(y.has_pass() and y.is_true()), self.vartype[vtype], 0)
-
-    def count_fail_truth_germline(self,vtype):
-        ''' count total number of germline variants that fail filter but are present in truth file (i.e. false negatives) '''
-        return reduce(lambda x, y: x+(not y.has_somatic() and not y.has_pass() and y.is_true()), self.vartype[vtype], 0)
-
-    def count_pass_truth_germline(self,vtype):
-        ''' count total number of germline variants that pass filter and are present in truth file (i.e. true positives) '''
-        return reduce(lambda x, y: x+(not y.has_somatic() and y.has_pass() and y.is_true()), self.vartype[vtype], 0)
-
-    def count_match_pass_truth_somatic(self,vtype):
-        ''' count matched somatic variants that both pass filter and are present in truth file (i.e. true positives) '''
-        return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
-
-    def count_match_pass_truth_germline(self,vtype):
-        ''' count matched germline variants that both pass filter and are present in truth file (i.e. consistently misclassified) '''
-        return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and not y.has_somatic()), self.vartype[vtype], 0)
-
-    def count_match_disagree_truth_somatic(self,vtype):
-        ''' count matched somatic variants where one does not pass filter and are present in truth file (i.e. disagreement on true positives) '''
-        return reduce(lambda x, y: x+(y.has_pass() and not y.both_pass() and y.is_true() and y.matched() and y.both_somatic()), self.vartype[vtype], 0)
-
-    def count_match_pass_truth_disagree(self,vtype):
-        ''' count matched variants where both pass filter and are present in truth file but disagree on somatic vs. germline '''
-        return reduce(lambda x, y: x+(y.both_pass() and y.is_true() and y.matched() and y.has_somatic() and not y.both_somatic()), self.vartype[vtype], 0)
-
-    def count_unmatch_pass_truth_somatic(self,vtype):
-        ''' count unmatched somatic variants that pass filter and are present in truth file (i.e. discordant true positives) '''
-        return reduce(lambda x, y: x+(y.has_pass() and y.is_true() and not y.matched() and y.has_somatic()), self.vartype[vtype], 0)
-
-    def count_unmatch_fail_truth_somatic(self,vtype):
-        ''' count unmatched somatic variants that fail filter but are present in truth file (i.e. false negatives) '''
-        return reduce(lambda x, y: x+(not y.has_pass() and y.is_true() and not y.matched() and y.has_somatic()), self.vartype[vtype], 0)
-
-    def sum_scores(self,vtype):
-        ''' return sum of all scores for variant type '''
-        return reduce(lambda x, y: x+y.score(), self.vartype[vtype], 0.0)
 
 class Variant:
     ''' base class for variant types 
@@ -262,6 +196,19 @@ class Variant:
             return True
         return False
 
+    def recA_pass(self):
+        if self.recA is None:
+            return False
+        if not self.recA.FILTER:
+            return True
+        return False
+
+    def recB_pass(self):
+        if self.recB is None:
+            return False
+        if not self.recB.FILTER:
+            return True
+        return False
 
 class SNV (Variant):
     ''' single nucleotide variant subclass '''
@@ -340,80 +287,44 @@ class Segment:
 
 class Summary:
     def __init__(self):
-        self.n_only_A_somatic  = 0 
-        self.n_only_B_somatic  = 0
-        self.n_only_A_germline = 0
-        self.n_only_B_germline = 0
-        self.n_agree_som       = 0
-        self.n_agree_germ      = 0
-        self.n_disagree_som_A  = 0
-        self.n_disagree_som_B  = 0
-        self.n_shared_AB       = 0
-        self.n_shared_BA       = 0
+        self.infonames, self.uhnames, self.mhnames = get_sumheader() 
 
-        self.A_pass_truth_som      = 0
-        self.B_pass_truth_som      = 0
-        self.A_fail_truth_som      = 0
-        self.B_fail_truth_som      = 0
-        self.A_pass_truth_germ     = 0
-        self.B_pass_truth_germ     = 0
-        self.A_fail_truth_germ     = 0
-        self.B_fail_truth_germ     = 0
-        self.A_only_som_pass_truth = 0
-        self.B_only_som_pass_truth = 0
-        self.A_only_som_fail_truth = 0
-        self.B_only_som_fail_truth = 0
-        self.n_agree_som_truth     = 0
-        self.n_agree_germ_truth    = 0
-        self.n_disagree_som_truth  = 0
-        self.n_pass_disagree_truth = 0
+        self.info     = OrderedDict() 
+        self.unm_cats = OrderedDict() # unmatched categories
+        self.mat_cats = OrderedDict() # matched categories
 
-        self.vtype = None
-        self.chrom = None
-        self.start = None
-        self.end   = None
+        for infoname in self.infonames:
+            self.info[infoname] = None
+
+        for uhname in self.uhnames:
+            for prefix in ('A_','B_'):
+                self.unm_cats[prefix + uhname] = 0
+
+        for mhname in self.mhnames:
+            self.mat_cats[mhname] = 0
 
     def add(self, other):
-        assert self.vtype == other.vtype
-        self.n_only_A_somatic  += other.n_only_A_somatic
-        self.n_only_B_somatic  += other.n_only_B_somatic
-        self.n_only_A_germline += other.n_only_A_germline
-        self.n_only_B_germline += other.n_only_B_germline
-        self.n_agree_som       += other.n_agree_som
-        self.n_agree_germ      += other.n_agree_germ
-        self.n_disagree_som_A  += other.n_disagree_som_A
-        self.n_disagree_som_B  += other.n_disagree_som_B
-        self.n_shared_AB       += other.n_shared_AB
-        self.n_shared_BA       += other.n_shared_BA
+        assert self.info['vartype'] == other.info['vartype']
 
-        self.A_pass_truth_som      += other.A_pass_truth_som
-        self.B_pass_truth_som      += other.B_pass_truth_som
-        self.A_fail_truth_som      += other.A_fail_truth_som
-        self.B_fail_truth_som      += other.B_fail_truth_som
-        self.A_pass_truth_germ     += other.A_pass_truth_germ
-        self.B_pass_truth_germ     += other.B_pass_truth_germ
-        self.A_fail_truth_germ     += other.A_fail_truth_germ
-        self.B_fail_truth_germ     += other.B_fail_truth_germ
-        self.A_only_som_pass_truth += other.A_only_som_pass_truth
-        self.B_only_som_pass_truth += other.B_only_som_pass_truth
-        self.A_only_som_fail_truth += other.A_only_som_fail_truth
-        self.B_only_som_fail_truth += other.B_only_som_fail_truth
-        self.n_agree_som_truth     += other.n_agree_som_truth
-        self.n_agree_germ_truth    += other.n_agree_germ_truth
-        self.n_disagree_som_truth  += other.n_disagree_som_truth
-        self.n_pass_disagree_truth += other.n_pass_disagree_truth
+        # matched categories
+        for mhname in other.mat_cats.keys():
+            self.mat_cats[mhname] += other.mat_cats[mhname]
 
-    def __str__(self):
-        outstr = map(str, (self.chrom, self.start, self.end, self.vtype, self.n_only_A_somatic, self.n_only_A_germline, 
-                           self.n_only_B_somatic, self.n_only_B_germline, self.n_agree_som, self.n_agree_germ, 
-                           self.n_disagree_som_A, self.n_disagree_som_B, self.A_pass_truth_som, self.A_fail_truth_som,
-                           self.B_pass_truth_som, self.B_fail_truth_som, self.A_pass_truth_germ, self.A_fail_truth_germ,
-                           self.B_pass_truth_germ, self.B_fail_truth_germ, self.A_only_som_pass_truth,
-                           self.A_only_som_fail_truth, self.B_only_som_pass_truth, self.B_only_som_fail_truth, 
-                           self.n_agree_som_truth, self.n_agree_germ_truth, self.n_disagree_som_truth,
-                           self.n_pass_disagree_truth))
-        return ' '.join(outstr)
+        # unmatched categories
+        for uhname in other.unm_cats.keys():
+            self.unm_cats[uhname] += other.unm_cats[uhname]
 
+    def output(self):
+        for infoname, info in self.info.iteritems():
+            print infoname, info
+
+        # unmatched categories
+        for catname, count in self.unm_cats.iteritems():
+            print catname, count
+
+        # matched categories
+        for catname, count in self.mat_cats.iteritems():
+            print catname, count
 
 ## functions ##
 
@@ -619,64 +530,97 @@ def orientSV(alt):
 
     return orient
 
-def print_sumheader():
-    ''' summarize A --> B comparison and B --> A comparison '''
-    print ' '.join(('chrom','start','end','vtype','A_only_pass_somatic','A_only_pass_germline', 'B_only_pass_somatic',
-                    'B_only_pass_germline','match_pass_somatic','match_pass_germline', 'A_pass_disagree_somatic',
-                    'B_pass_disagree_somatic', 'A_pass_truth_somatic', 'A_fail_truth_somatic', 'B_pass_truth_somatic',
-                    'B_fail_truth_somatic', 'A_pass_truth_germline', 'A_fail_truth_germline', 'B_pass_truth_germline', 
-                    'B_fail_truth_germline', 'A_only_somatic_pass_truth', 'A_only_somatic_fail_truth', 
-                    'B_only_somatic_pass_truth', 'B_only_somatic_fail_truth', 'match_pass_somatic_truth', 
-                    'match_pass_germline_truth', 'match_disagree_pass_somatic_truth', 'match_pass_disagree_somatic_truth'))
+def get_sumheader(return_bool = False):
+    ''' build category names for comparisons '''
+    infonames = ['vartype']
+    mhnames = []
+    for truth,passA,passB,somA,somB in itertools.product([True, False], repeat=5): # cartesian product, itertools is awesome
+        mhname = ['matched']
+        for passX in (passA, passB):
+            if passX:
+                mhname.append('pass')
+            else:
+                mhname.append('fail')
 
-def summary(compAB_list, compBA_list, chrom=None, start=None, end=None):
+        for somX in (somA, somB):
+            if somX:
+                mhname.append('somatic')
+            else:
+                mhname.append('germline')
+
+        if truth:
+            mhname.append('truth')
+        else:
+            mhname.append('overall')
+
+        if return_bool:
+            mhnames.append([True,passA,passB,somA,somB,truth])
+        else:
+            mhnames.append('_'.join(mhname))
+
+    uhnames = []
+    for truth, passA, somA in itertools.product([True,False], repeat=3):
+        uhname = ['unmatched']
+        if passA:
+            uhname.append('pass')
+        else:
+            uhname.append('fail')
+
+        if somA:
+            uhname.append('somatic')
+        else:
+            uhname.append('germline')
+
+        if truth:
+            uhname.append('truth')
+        else:
+            uhname.append('overall')
+
+        if return_bool:
+            uhnames.append([False,passA,somA,truth])
+        else:
+            uhnames.append('_'.join(uhname))
+
+    return infonames, uhnames, mhnames
+
+def summary(compAB_list, compBA_list):
     ''' summarize A --> B comparison and B --> A comparison '''
     s = {}
+    n_shared_AB = 0
+    n_shared_BA = 0
 
     for vtype in compAB_list[0].vartype.keys():
         assert compBA_list[0].vartype.has_key(vtype)
         s[vtype] = Summary()
-        s[vtype].chrom = chrom
-        s[vtype].start = start
-        s[vtype].end   = end
-        s[vtype].vtype = vtype   
- 
-        for compAB, compBA in itertools.izip(compAB_list, compBA_list):
-            s[vtype].n_shared_AB       += compAB.matched(vtype)
-            s[vtype].n_shared_BA       += compBA.matched(vtype)
-            s[vtype].n_only_A_somatic  += compAB.unmatched_somatic(vtype)
-            s[vtype].n_only_B_somatic  += compBA.unmatched_somatic(vtype)
-            s[vtype].n_only_A_germline += compAB.unmatched_germline(vtype)
-            s[vtype].n_only_B_germline += compBA.unmatched_germline(vtype)
-            s[vtype].n_agree_som       += compAB.count_agree_somatic(vtype)
-            s[vtype].n_agree_germ      += compAB.count_agree_germline(vtype)
-            s[vtype].n_disagree_som_A  += compAB.count_disagree_somatic(vtype)
-            s[vtype].n_disagree_som_B  += compBA.count_disagree_somatic(vtype)
+        s[vtype].info['vartype'] = vtype
 
-            s[vtype].A_pass_truth_som      += compAB.count_pass_truth_somatic(vtype)
-            s[vtype].A_fail_truth_som      += compAB.count_fail_truth_somatic(vtype)
-            s[vtype].B_pass_truth_som      += compBA.count_pass_truth_somatic(vtype)
-            s[vtype].B_fail_truth_som      += compBA.count_fail_truth_somatic(vtype)
-            s[vtype].A_pass_truth_germ     += compAB.count_pass_truth_germline(vtype)
-            s[vtype].A_fail_truth_germ     += compAB.count_fail_truth_germline(vtype)
-            s[vtype].B_pass_truth_germ     += compBA.count_pass_truth_germline(vtype)
-            s[vtype].B_fail_truth_germ     += compBA.count_fail_truth_germline(vtype)
-            s[vtype].A_only_som_pass_truth += compAB.count_unmatch_pass_truth_somatic(vtype) 
-            s[vtype].B_only_som_pass_truth += compBA.count_unmatch_pass_truth_somatic(vtype)
-            s[vtype].A_only_som_fail_truth += compAB.count_unmatch_fail_truth_somatic(vtype)
-            s[vtype].B_only_som_fail_truth += compBA.count_unmatch_fail_truth_somatic(vtype)
-            s[vtype].n_agree_som_truth     += compAB.count_match_pass_truth_somatic(vtype)
-            s[vtype].n_agree_germ_truth    += compAB.count_match_pass_truth_germline(vtype)
-            s[vtype].n_disagree_som_truth  += compAB.count_match_disagree_truth_somatic(vtype)
-            s[vtype].n_pass_disagree_truth += compAB.count_match_pass_truth_disagree(vtype)
+        bool_cmplist = get_sumheader(return_bool=True)
+        name_cmplist = get_sumheader()
+
+        for compAB, compBA in itertools.izip(compAB_list, compBA_list):
+            unmatched_cat_names = name_cmplist[1]
+            matched_cat_names   = name_cmplist[2]
+
+            # unmatched stats
+            for cat, bools in itertools.izip(unmatched_cat_names, bool_cmplist[1]):
+                # parameters for build_comparator
+                p_matched, p_passA, p_somA, p_truth = bools
+                for prefix in ('A_', 'B_'):
+                    if prefix == 'A_':
+                        s[vtype].unm_cats[prefix+cat] += compAB.build_comparator(vtype, matched=p_matched, passA=p_passA, somA=p_somA, truth=p_truth)(vtype)
+                    if prefix == 'B_': # note passA, somA are the correct parameters as tis comparison (compBA) means A <==> B
+                        s[vtype].unm_cats[prefix+cat] += compBA.build_comparator(vtype, matched=p_matched, passA=p_passA, somA=p_somA, truth=p_truth)(vtype)
+
+            # matched stats
+            for cat, bools in itertools.izip(matched_cat_names, bool_cmplist[2]):
+                p_matched, p_passA, p_passB, p_somA, p_somB, p_truth = bools
+                s[vtype].mat_cats[cat] += compAB.build_comparator(vtype, matched=p_matched, passA=p_passA, passB=p_passB, somA=p_somA, somB=p_somB, truth=p_truth)(vtype)
 
     for vtype in s.keys():
-        if s[vtype].n_shared_AB != s[vtype].n_shared_BA:
-            if chrom is not None:
-                sys.stderr.write("region " + chrom + ":" + str(start) + "-" + str(end) + ": ")
-                sys.stderr.write("warning: overlap was not symmetric for " + vtype)
-                sys.stderr.write(" (A-->B: " + str(s[vtype].n_shared_AB) + "),") 
-                sys.stderr.write(" (B-->A: " + str(s[vtype].n_shared_BA) + ") using A-->B\n")
+        if n_shared_AB != n_shared_BA: # FIXME
+            sys.stderr.write("warning: overlap was not symmetric for " + vtype)
+            sys.stderr.write(" (A-->B: " + str(n_shared_AB) + "),") 
+            sys.stderr.write(" (B-->A: " + str(n_shared_BA) + ") using A-->B\n")
     return s
 
 def outputVCF(comparison_list, inVCFhandle, outdir, outbasename=None):
@@ -832,7 +776,7 @@ def runList(result_queue, vcfA_queue, vcfB_queue, args, seg_list, vcftag):
         resultsAB.append(resultAB)
         resultsBA.append(resultBA)
         if args.verbose:
-            summary([resultAB], [resultBA], chrom=seg.chrom, start=seg.start, end=seg.end)
+            summary([resultAB], [resultBA])
 
     basenameA = os.path.basename(vcf_handles[0].filename) + "." + vcftag
     basenameB = os.path.basename(vcf_handles[1].filename) + "." + vcftag
@@ -850,10 +794,9 @@ def main(args):
     outputVCF([resultAB], vcf_handles[0], args.outdir)
     outputVCF([resultBA], vcf_handles[1], args.outdir)
 
-    s = summary([resultAB], [resultBA], chrom=args.chrom, start=args.start, end=args.end)
-    print_sumheader()
+    s = summary([resultAB], [resultBA])
     for vartype in s.keys():
-        print s[vartype]
+        s[vartype].output()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')

@@ -68,9 +68,8 @@ def main(args):
                 summaries[vtype].add(s[vtype])
 
     print "-"*60
-    vc.print_sumheader()
     for vtype in summaries.keys():
-        print summaries[vtype]
+        summaries[vtype].output()
     print "-"*60
 
     if not args.skip_merge:
