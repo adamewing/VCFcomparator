@@ -8,6 +8,8 @@ from multiprocessing import Process, Queue
 from re import sub
 from os import remove
 from os.path import basename
+from time import sleep
+from itertools import izip
 
 def merge_vcfs(files, outname, outdir=None, verbose=False):
     assert len(files) > 0
@@ -55,12 +57,33 @@ def main(args):
     for p in processes:
         p.start()
 
-    for p in processes:
-        p.join()
+    ''' dequeue jobs as they finish to avoid filling up the queue (see http://http://bugs.python.org/issue8426) '''
+
+    dequeued_summaries = []
+    dequeued_vcfA      = []
+    dequeued_vcfB      = []
+
+    dequeued_jobs = 0
+    while dequeued_jobs < np * 3:
+        while not result_queue.empty():
+            dequeued_summaries.append(result_queue.get())
+            dequeued_jobs += 1
+            if args.verbose:
+                sys.stderr.write("debug info: dequeued #" + str(dequeued_jobs) + " from result_queue.\n")
+        while not vcfA_queue.empty():
+            dequeued_vcfA.append(vcfA_queue.get())
+            dequeued_jobs += 1
+            if args.verbose:
+                sys.stderr.write("debug info: dequeued #" + str(dequeued_jobs) + " from vcfA_queue.\n")
+        while not vcfB_queue.empty():
+            dequeued_vcfB.append(vcfB_queue.get())
+            dequeued_jobs += 1
+            if args.verbose:
+                sys.stderr.write("debug info: dequeued #" + str(dequeued_jobs) + " from vcfB_queue.\n")
+        sleep(5)
 
     summaries = {}
-    for _ in range(np):
-        s = result_queue.get()
+    for s in dequeued_summaries:
         for vtype in s.keys():
             if vtype not in summaries:
                 summaries[vtype] = s[vtype]
@@ -85,9 +108,7 @@ def main(args):
 
         sys.stderr.write("merging VCFs...\n")
 
-        for _ in range(np):
-            vcfA_matched, vcfA_unmatched = vcfA_queue.get()
-            vcfB_matched, vcfB_unmatched = vcfB_queue.get()
+        for (vcfA_matched, vcfA_unmatched), (vcfB_matched, vcfB_unmatched) in izip(dequeued_vcfA, dequeued_vcfB):
             vcfA_matched_files.append(vcfA_matched)
             vcfA_unmatched_files.append(vcfA_unmatched)
             vcfB_matched_files.append(vcfB_matched)
