@@ -315,16 +315,20 @@ class Summary:
             self.unm_cats[uhname] += other.unm_cats[uhname]
 
     def output(self):
+        out = []
+
         for infoname, info in self.info.iteritems():
-            print infoname, info
+            out.append(' '.join((infoname, info)))
 
         # unmatched categories
         for catname, count in self.unm_cats.iteritems():
-            print catname, count
+            out.append(' '.join((catname, str(count))))
 
         # matched categories
         for catname, count in self.mat_cats.iteritems():
-            print catname, count
+            out.append(' '.join((catname, str(count))))
+
+        return "\n".join(out)
 
 ## functions ##
 
@@ -764,7 +768,7 @@ def split_genome(chroms, n, minlen=1e6, verbose=False):
 
     return jobs
 
-def runList(result_queue, vcfA_queue, vcfB_queue, args, seg_list, vcftag):
+def runList(result_queue, vcfA_queue, vcfB_queue, args, seg_list, vcftag, mp=False):
     ''' used by external script to parallelize jobs, vcftag will be appended to VCF output basename '''    
     resultsAB = []
     resultsBA = []
@@ -784,10 +788,17 @@ def runList(result_queue, vcfA_queue, vcfB_queue, args, seg_list, vcftag):
     vcfA_names = outputVCF(resultsAB, vcf_handles[0], args.outdir, outbasename=basenameA)
     vcfB_names = outputVCF(resultsBA, vcf_handles[1], args.outdir, outbasename=basenameB)
     s = summary(resultsAB, resultsBA)
-    
-    result_queue.put(s)
-    vcfA_queue.put(vcfA_names)
-    vcfB_queue.put(vcfB_names)
+
+    if args.summary_outfile is not None:
+        sum_out = open(args.summary_outfile, 'w')
+        for vartype in s.keys():
+            sum_out.write(s[vartype].output() + "\n")
+        sum_out.close()
+
+    if mp:
+        result_queue.put(s)
+        vcfA_queue.put(vcfA_names)
+        vcfB_queue.put(vcfB_names)
 
 def main(args):
     resultAB, resultBA, vcf_handles = parseVCFs(args.vcf, maskfile=args.maskfile, truthvcf=args.truth, chrom=args.chrom, start=int(args.start), end=int(args.end), verbose=args.verbose)
@@ -795,8 +806,14 @@ def main(args):
     outputVCF([resultBA], vcf_handles[1], args.outdir)
 
     s = summary([resultAB], [resultBA])
-    for vartype in s.keys():
-        s[vartype].output()
+    if args.summary_outfile is None:
+        for vartype in s.keys():
+            print s[vartype].output()
+    else:
+        sum_out = open(args.summary_outfile, 'w')
+        for vartype in s.keys():
+            sum_out.write(s[vartype].output() + "\n")
+        sum_out.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compares two sorted VCF files and (optionally) masks regions.')
@@ -807,6 +824,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--chrom', dest='chrom', default=None, help='limit to one chromosome')
     parser.add_argument('-s', '--start', dest='start', default=0, help='start position')
     parser.add_argument('-e', '--end', dest='end', default=int(1e9), help='end position') 
+    parser.add_argument('-u', '--summary', dest='summary_outfile', default=None, help='outfile for summary (default stdout)')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='verbose mode for debugging')
     args = parser.parse_args()
     main(args)
