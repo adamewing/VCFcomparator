@@ -96,6 +96,8 @@ def main(args):
         print summaries[vtype].output()
     print "-"*60
 
+    sys.stdout.flush()
+
     if not args.skip_merge:
         vcfA_matched_files   = []
         vcfA_unmatched_files = []
