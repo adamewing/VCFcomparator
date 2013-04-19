@@ -37,13 +37,16 @@ def is_snp(rec):
         snp = False
 
     SS = []
+    has_format_ss = False
     for sample in rec.samples:
         calldata = sample.data
         if 'SS' in calldata._fields:
+            has_format_ss = True
             SS.append(calldata.SS)
 
-    if not '1' in SS and not 1 in SS and not '2' in SS and not 2 in SS:
-        snp = False
+    if has_format_ss:
+        if not '1' in SS and not 1 in SS and not '2' in SS and not 2 in SS:
+            snp = False
 
     return snp 
 
@@ -102,15 +105,16 @@ if len(sys.argv) == 3:
             if germline and failed:
                 n_germ_fail += 1
 
-    qname = ' '.join((basename(sys.argv[1]), sys.argv[2]))
-    print qname, "Total", n_total
-    print qname, "Total_Germline",  n_germ
-    print qname, "Total_Somatic",   n_som
-    print qname, "Total_Passed",    n_pass
-    print qname, "Total_Failed",    n_fail
-    print qname, "Somatic_Passed",  n_som_pass
-    print qname, "Somatic_Failed",  n_som_fail
-    print qname, "Germline_Passed", n_germ_pass
-    print qname, "Germline_Failed", n_germ_fail
+    print "VCF", basename(sys.argv[1])
+    print "VTYPE", sys.argv[2]
+    print "Total", n_total
+    print "Total_Germline",  n_germ
+    print "Total_Somatic",   n_som
+    print "Total_Passed",    n_pass
+    print "Total_Failed",    n_fail
+    print "Somatic_Passed",  n_som_pass
+    print "Somatic_Failed",  n_som_fail
+    print "Germline_Passed", n_germ_pass
+    print "Germline_Failed", n_germ_fail
 else:
     print "usage:", sys.argv[0], "<VCF> <VTYPE (SNP/INDEL)>"
