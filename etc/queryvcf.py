@@ -49,7 +49,7 @@ def vcfVariantMatch(recA, recB):
     return False
 
 def main(args):
-    if None == args.queryvcf == args.querybed == args.excludevcf and not args.passonly and not args.failonly:
+    if None == args.queryvcf == args.querybed == args.excludevcf and not args.passonly and not args.failonly and not args.maskbed:
         sys.exit("nothing to do!")
 
     if True == args.passonly == args.failonly:
@@ -103,7 +103,6 @@ def main(args):
                     output = True
 
         if mbed is not None:
-            output = False
             if rec.CHROM in mbed.contigs:
                 if len(list(mbed.fetch(rec.CHROM, rec.start, rec.end))) > 0:
                     output = False
