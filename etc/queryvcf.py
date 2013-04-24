@@ -49,15 +49,17 @@ def vcfVariantMatch(recA, recB):
     return False
 
 def main(args):
-    if None == args.queryvcf == args.querybed == args.excludevcf and not args.passonly and not args.failonly and not args.maskbed:
+    if None == args.queryvcf == args.querybed == args.excludevcf == args.vtype and not args.passonly and not args.failonly and not args.maskbed:
         sys.exit("nothing to do!")
 
     if True == args.passonly == args.failonly:
         sys.exit("called with both -p/--passonly and -f/--failonly, null result")
 
+    if args.switch_report and args.queryvcf is None:
+        sys.exit("cannot use -r/--switch_report without -v/--vcf")
+
     assert args.vcf[0].endswith('.vcf') or args.vcf[0].endswith('.vcf.gz') 
     vcfin = vcf.Reader(filename=args.vcf[0])
-    vcfout = vcf.Writer(sys.stdout, vcfin)
 
     # initalize query BED if specified
     qbed = None
@@ -82,6 +84,18 @@ def main(args):
     if args.excludevcf is not None:
         assert args.excludevcf.endswith('vcf.gz') and os.path.exists(args.excludevcf + '.tbi')
         xvcf = vcf.Reader(filename=args.excludevcf)
+
+    # variant type
+    vtype = None
+    if args.vtype is not None:
+        assert args.vtype in ('SNV', 'INDEL', 'SV')
+        vtype = args.vtype
+
+    vcfout = None
+    if args.switch_report:
+        vcfout = vcf.Writer(sys.stdout, qvcf)
+    else:
+        vcfout = vcf.Writer(sys.stdout, vcfin)
 
     for rec in vcfin:
         output = True
@@ -115,6 +129,15 @@ def main(args):
             except:
                 pass
 
+        if vtype == 'SNV' and (not rec.is_snp or (rec.is_snp and rec.INFO.get('VT') == 'LOH')):
+            output = False
+
+        if vtype == 'INDEL' and not rec.is_indel:
+            output = False
+
+        if vtype == 'SV' and not rec.is_sv:
+            output = False
+
         if args.passonly and rec.FILTER:
             output = False
 
@@ -140,6 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('-x', '--exclude', dest='excludevcf', default=None, help='query will not return any results matching this (tabix-indexed) VCF file')
     parser.add_argument('-b', '--bed', dest='querybed', default=None, help='tabix-indexed BED file (chrom, start, end, ...), query will return only results in overlapping regions')
     parser.add_argument('-m', '--mask', dest='maskbed', default=None, help='tabix-indexed BED file (chrom, start, end, ...), query will not return results in overlapping regions')
+    parser.add_argument('-t', '--vtype', dest='vtype', default=None, help='only include variants of vtype where vtype is SNV, INDEL, or SV')
     parser.add_argument('-p', '--passonly', action='store_true', default=False, help='only return PASS records')
     parser.add_argument('-f', '--failonly', action='store_true', default=False, help='only return non-PASS records')
     parser.add_argument('-s', '--somaticonly', action='store_true', default=False, help='only return somatic records')
