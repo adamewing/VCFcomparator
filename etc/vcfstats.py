@@ -64,7 +64,8 @@ if len(sys.argv) == 3:
     n_germ_pass = 0
     n_germ_fail = 0
 
-    fail_reasons = {}
+    som_fail_reasons  = {}
+    germ_fail_reasons = {}
 
     for rec in vcfin:
         if (is_snp(rec) and sys.argv[2] == 'SNP') or (rec.is_indel and sys.argv[2] == 'INDEL'): 
@@ -85,10 +86,16 @@ if len(sys.argv) == 3:
                 n_fail += 1
                 failed = True
                 for flag in rec.FILTER:
-                    if flag in fail_reasons:
-                        fail_reasons[flag] += 1
+                    if is_somatic(rec):
+                        if flag in som_fail_reasons:
+                            som_fail_reasons[flag] += 1
+                        else:
+                            som_fail_reasons[flag] = 1
                     else:
-                        fail_reasons[flag] = 1
+                        if flag in germ_fail_reasons:
+                            germ_fail_reasons[flag] += 1
+                        else:
+                            germ_fail_reasons[flag] = 1
             else:
                 n_pass += 1
                 passed = True
@@ -116,5 +123,12 @@ if len(sys.argv) == 3:
     print "Somatic_Failed",  n_som_fail
     print "Germline_Passed", n_germ_pass
     print "Germline_Failed", n_germ_fail
+#    print "Somatic fail filter counts:"
+#    for flag, count in som_fail_reasons.iteritems():
+#        print flag, count
+#    print "Germline fail filter counts:"
+#    for flag, count in germ_fail_reasons.iteritems():
+#        print flag, count
+
 else:
     print "usage:", sys.argv[0], "<VCF> <VTYPE (SNP/INDEL)>"
