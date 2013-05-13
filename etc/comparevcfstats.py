@@ -7,6 +7,10 @@ import numpy as np
 import scipy.stats as ss
 from os.path import basename
 
+#import matplotlib
+#matplotlib.use('Agg')
+#import matplotlib.pyplot as plt
+
 def get_val(a):
     # is it iterable?
     try:
@@ -143,9 +147,10 @@ def main(args):
                 print basename(args.vcf[1]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf2_values))
                 print 'M-W U:', ss.mannwhitneyu(vcf1_values, vcf2_values)
 
-#    for sample_name, fmt in fmt_vcf2.iteritems():
-#        for tag, values in fmt.iteritems():
-#            print basename(args.vcf[1]), 'FORMAT', sample_name, tag, ','.join(map(str, values))
+                #fig = plt.figure()
+                #ax = fig.add_subplot(111)
+                #ax.hist(vcf1_values, bins=20)
+                #plt.savefig("test.png")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compare info and format values from two VCF files')
