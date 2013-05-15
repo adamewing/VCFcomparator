@@ -7,9 +7,9 @@ import numpy as np
 import scipy.stats as ss
 from os.path import basename
 
-#import matplotlib
-#matplotlib.use('Agg')
-#import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 def get_val(a):
     # is it iterable?
@@ -133,7 +133,18 @@ def main(args):
             print 'INFO', tag, ':', h_vcf1.infos[tag].desc
             print basename(args.vcf[0]), 'INFO', tag, ','.join(map(str, vcf1_values))
             print basename(args.vcf[1]), 'INFO', tag, ','.join(map(str, vcf2_values))
-            print 'M-W U:', ss.mannwhitneyu(vcf1_values, vcf2_values)
+            mwu = ss.mannwhitneyu(vcf1_values, vcf2_values)
+            mwstring = "Mann-Whitney U: " + "%0.1f" % mwu[0] + " P=" + "%0.3f" % mwu[1]
+            print mwstring 
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.set_title("INFO: " + tag + "\n(" + h_vcf1.infos[tag].desc + ")" + "\n" + mwstring)
+            range = (min(vcf1_values.min(), vcf2_values.min()), max(vcf1_values.max(), vcf2_values.max()))
+            ax.hist(vcf1_values, range=range, bins=20, alpha=0.3, label=args.label1, normed=True)
+            ax.hist(vcf2_values, range=range, bins=20, alpha=0.3, label=args.label2, normed=True)
+            ax.legend()
+            plt.savefig(args.plotname + "_INFO_" + tag + "_" + ".png", bbox_inches='tight')
 
     for sample_name, fmt in fmt_vcf1.iteritems():
         for tag, values in fmt.iteritems():
@@ -145,16 +156,25 @@ def main(args):
                 print 'FORMAT', tag, sample_name, ':', h_vcf1.formats[tag].desc
                 print basename(args.vcf[0]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf1_values))
                 print basename(args.vcf[1]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf2_values))
-                print 'M-W U:', ss.mannwhitneyu(vcf1_values, vcf2_values)
+                mwu = ss.mannwhitneyu(vcf1_values, vcf2_values)
+                mwstring = "Mann-Whitney U: " + "%0.1f" % mwu[0] + " P=" + "%0.3f" % mwu[1]
+                print mwstring 
 
-                #fig = plt.figure()
-                #ax = fig.add_subplot(111)
-                #ax.hist(vcf1_values, bins=20)
-                #plt.savefig("test.png")
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                ax.set_title("FORMAT: " + tag + " " + sample_name + "\n(" + h_vcf1.formats[tag].desc + ")" + "\n" + mwstring) 
+                range = (min(vcf1_values.min(), vcf2_values.min()), max(vcf1_values.max(), vcf2_values.max()))
+                ax.hist(vcf1_values, range=range, bins=20, alpha=0.3, label=args.label1, normed=True)
+                ax.hist(vcf2_values, range=range, bins=20, alpha=0.3, label=args.label2, normed=True)
+                ax.legend()
+                plt.savefig(args.plotname + "_FORMAT_" + tag + "_" + sample_name + ".png", bbox_inches='tight')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compare info and format values from two VCF files')
     parser.add_argument(metavar='<vcf_file>', dest='vcf', nargs=2, help='files in VCF format')
+    parser.add_argument('--label1', dest='label1', default='vcf1', help='label for vcf1') 
+    parser.add_argument('--label2', dest='label2', default='vcf2', help='label for vcf2')
+    parser.add_argument('--name', dest='plotname', default='plot', help='basename for plots') 
     parser.add_argument('-t', '--vtype', dest='vtype', default=None, help='only include variants of vtype where vtype is SNV, INDEL, or SV')
     parser.add_argument('-p', '--passonly', action='store_true', default=False, help='only return PASS records')
     parser.add_argument('-f', '--failonly', action='store_true', default=False, help='only return non-PASS records')
