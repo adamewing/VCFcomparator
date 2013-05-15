@@ -44,10 +44,6 @@ def is_snp(rec):
             has_format_ss = True
             SS.append(calldata.SS)
 
-    if has_format_ss:
-        if not '1' in SS and not 1 in SS and not '2' in SS and not 2 in SS:
-            snp = False
-
     return snp 
 
 if len(sys.argv) == 3:

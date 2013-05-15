@@ -6,6 +6,7 @@ import pprint
 import numpy as np
 import scipy.stats as ss
 from os.path import basename
+from textwrap import wrap
 
 import matplotlib
 matplotlib.use('Agg')
@@ -139,7 +140,7 @@ def main(args):
 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.set_title("INFO: " + tag + "\n(" + h_vcf1.infos[tag].desc + ")" + "\n" + mwstring)
+            ax.set_title("INFO: " + tag + "\n(" + "\n".join(wrap(h_vcf1.infos[tag].desc)) + ")" + "\n" + mwstring)
             range = (min(vcf1_values.min(), vcf2_values.min()), max(vcf1_values.max(), vcf2_values.max()))
             ax.hist(vcf1_values, range=range, bins=20, alpha=0.3, label=args.label1, normed=True)
             ax.hist(vcf2_values, range=range, bins=20, alpha=0.3, label=args.label2, normed=True)
@@ -162,7 +163,7 @@ def main(args):
 
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
-                ax.set_title("FORMAT: " + tag + " " + sample_name + "\n(" + h_vcf1.formats[tag].desc + ")" + "\n" + mwstring) 
+                ax.set_title("FORMAT: " + tag + " " + sample_name + "\n(" + "\n".join(wrap(h_vcf1.formats[tag].desc)) + ")" + "\n" + mwstring) 
                 range = (min(vcf1_values.min(), vcf2_values.min()), max(vcf1_values.max(), vcf2_values.max()))
                 ax.hist(vcf1_values, range=range, bins=20, alpha=0.3, label=args.label1, normed=True)
                 ax.hist(vcf2_values, range=range, bins=20, alpha=0.3, label=args.label2, normed=True)
