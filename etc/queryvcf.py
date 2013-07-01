@@ -49,8 +49,6 @@ def vcfVariantMatch(recA, recB):
     return False
 
 def main(args):
-    if None == args.queryvcf == args.querybed == args.excludevcf == args.vtype and not args.passonly and not args.failonly and not args.maskbed:
-        sys.exit("nothing to do!")
 
     if True == args.passonly == args.failonly:
         sys.exit("called with both -p/--passonly and -f/--failonly, null result")
