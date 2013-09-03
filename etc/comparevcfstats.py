@@ -180,10 +180,10 @@ def main(args):
             vcf1_values = np.asarray(values)
             vcf2_values = np.asarray(info_vcf2[tag])
 
-            #print '-'*60
-            #print 'INFO', tag, ':', h_vcf1.infos[tag].desc
-            #print basename(args.vcf[0]), 'INFO', tag, ','.join(map(str, vcf1_values))
-            #print basename(args.vcf[1]), 'INFO', tag, ','.join(map(str, vcf2_values))
+            print '-'*60
+            print 'INFO', tag, ':', h_vcf1.infos[tag].desc
+            print basename(args.vcf[0]), 'INFO', tag, ','.join(map(str, vcf1_values))
+            print basename(args.vcf[1]), 'INFO', tag, ','.join(map(str, vcf2_values))
             mwu = ss.mannwhitneyu(vcf1_values, vcf2_values)
             mwstring = "INFO (" + tag + ") Mann-Whitney U: " + "%0.1f" % mwu[0] + " P=" + "%0.3f" % mwu[1]
             print mwstring 
@@ -220,10 +220,10 @@ def main(args):
                 vcf1_values = np.asarray(values)
                 vcf2_values = np.asarray(fmt_vcf2[sample_name][tag])
 
-                #print '-'*60
-                #print 'FORMAT', tag, sample_name, ':', h_vcf1.formats[tag].desc
-                #print basename(args.vcf[0]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf1_values))
-                #print basename(args.vcf[1]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf2_values))
+                print '-'*60
+                print 'FORMAT', tag, sample_name, ':', h_vcf1.formats[tag].desc
+                print basename(args.vcf[0]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf1_values))
+                print basename(args.vcf[1]), 'FORMAT', sample_name, tag, ','.join(map(str, vcf2_values))
                 mwu = ss.mannwhitneyu(vcf1_values, vcf2_values)
                 mwstring = "FORMAT (" + tag + ") Mann-Whitney U: " + "%0.1f" % mwu[0] + " P=" + "%0.3f" % mwu[1]
                 print mwstring 

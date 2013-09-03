@@ -8,8 +8,6 @@ import vcf
 import os
 import pysam
 
-
-
 def is_somatic(rec):
     if str(rec.INFO.get('SS')).upper() in ['SOMATIC', '2']:
         return True
@@ -48,54 +46,76 @@ def vcfVariantMatch(recA, recB):
 
     return False
 
-def main(args):
+def queryvcf(vcf_fn, silent=False, queryvcf=None, excludevcf=None, querybed=None, maskbed=None, vtype=None, passonly=False, 
+             failonly=False, somaticonly=False, germlineonly=False, switch_report=False, outfile=None, similarity=False):
 
-    if True == args.passonly == args.failonly:
+    #sys.stderr.write(','.join(map(str, (vcf_fn, queryvcf, excludevcf, querybed, maskbed, vtype, passonly, failonly, somaticonly, germlineonly, switch_report, outfile, similarity))) + "\n")
+
+    if None == queryvcf == querybed == excludevcf == vtype and not passonly and not failonly and not maskbed:
+        sys.exit("nothing to do!")
+
+    if True == passonly == failonly:
         sys.exit("called with both -p/--passonly and -f/--failonly, null result")
 
-    if args.switch_report and args.queryvcf is None:
+    if switch_report and queryvcf is None:
         sys.exit("cannot use -r/--switch_report without -v/--vcf")
 
-    assert args.vcf[0].endswith('.vcf') or args.vcf[0].endswith('.vcf.gz') 
-    vcfin = vcf.Reader(filename=args.vcf[0])
+    assert vcf_fn.endswith('.vcf') or vcf_fn.endswith('.vcf.gz') 
+    vcfin = vcf.Reader(filename=vcf_fn)
 
     # initalize query BED if specified
     qbed = None
-    if args.querybed is not None:
-        assert args.querybed.endswith('.gz') and os.path.exists(args.querybed + '.tbi')
-        qbed = pysam.Tabixfile(args.querybed) 
+    if querybed is not None:
+        assert querybed.endswith('.gz') and os.path.exists(querybed + '.tbi')
+        qbed = pysam.Tabixfile(querybed)
 
     # initalize mask BED if specified
     mbed = None
-    if args.maskbed is not None:
-        assert args.maskbed.endswith('.gz') and os.path.exists(args.maskbed + '.tbi')
-        mbed = pysam.Tabixfile(args.maskbed) 
+    if maskbed is not None:
+        assert maskbed.endswith('.gz') and os.path.exists(maskbed + '.tbi')
+        mbed = pysam.Tabixfile(maskbed) 
 
     # initalize query VCF if specified
     qvcf = None
-    if args.queryvcf is not None:
-        assert args.queryvcf.endswith('vcf.gz') and os.path.exists(args.queryvcf + '.tbi')
-        qvcf = vcf.Reader(filename=args.queryvcf)
+    if queryvcf is not None:
+        assert queryvcf.endswith('vcf.gz') and os.path.exists(queryvcf + '.tbi')
+        qvcf = vcf.Reader(filename=queryvcf)
 
     # initialize exclusion VCF if specified
     xvcf = None
-    if args.excludevcf is not None:
-        assert args.excludevcf.endswith('vcf.gz') and os.path.exists(args.excludevcf + '.tbi')
-        xvcf = vcf.Reader(filename=args.excludevcf)
+    if excludevcf is not None:
+        assert excludevcf.endswith('vcf.gz') and os.path.exists(excludevcf + '.tbi')
+        xvcf = vcf.Reader(filename=excludevcf)
+
+    n_query = 0
+    if similarity and not qvcf:
+        sys.exit("cannot compute similarity without -v/--vcf")
+    else:
+        for rec in qvcf:
+            n_query += 1
 
     # variant type
-    vtype = None
-    if args.vtype is not None:
-        assert args.vtype in ('SNV', 'INDEL', 'SV')
-        vtype = args.vtype
+    if vtype is not None:
+        assert vtype in ('SNV', 'INDEL', 'SV')
 
     vcfout = None
-    if args.switch_report:
-        vcfout = vcf.Writer(sys.stdout, qvcf)
-    else:
-        vcfout = vcf.Writer(sys.stdout, vcfin)
+    if not silent:
+        if switch_report:
+            if outfile is not None:
+                vcfout = vcf.Writer(file(outfile, 'w'), qvcf)
+            else:
+                vcfout = vcf.Writer(sys.stdout, qvcf)
+        else:
+            if outfile is not None:
+                vcfout = vcf.Writer(file(outfile, 'w'), vcfin)
+            else:
+                vcfout = vcf.Writer(sys.stdout, vcfin)
+
+    n_output = 0
+    n_total  = 0
 
     for rec in vcfin:
+        n_total += 1
         output = True
         query_rec = None
         if qvcf is not None:
@@ -136,23 +156,41 @@ def main(args):
         if vtype == 'SV' and not rec.is_sv:
             output = False
 
-        if args.passonly and rec.FILTER:
+        if passonly and rec.FILTER:
             output = False
 
-        if args.failonly and not rec.FILTER:
+        if failonly and not rec.FILTER:
             output = False
 
-        if args.somaticonly and not is_somatic(rec):
+        if somaticonly and not is_somatic(rec):
             output = False
 
-        if args.germlineonly and is_somatic(rec):
+        if germlineonly and is_somatic(rec):
             output = False
 
         if output:
-            if args.vcf is not None and args.switch_report:
-                vcfout.write_record(query_rec)
-            else:
-                vcfout.write_record(rec)
+            n_output += 1
+            if not silent:
+                if vcf is not None and switch_report:
+                    vcfout.write_record(query_rec)
+                else:
+                    vcfout.write_record(rec)
+
+    if similarity:
+        return n_total, n_query, n_output, (float(n_output) / float(n_query + n_total - n_output))
+    else:
+        return n_total, n_query, n_output, float(n_output)
+
+def main(args):
+    s = queryvcf(args.vcf[0], queryvcf=args.queryvcf, excludevcf=args.excludevcf, querybed=args.querybed, 
+                 maskbed=args.maskbed, vtype=args.vtype, passonly=args.passonly, failonly=args.failonly, 
+                 somaticonly=args.somaticonly, germlineonly=args.germlineonly, switch_report=args.switch_report,
+                 outfile=args.outfile, similarity=args.return_sim)
+
+    if args.return_sim:
+        print "similarity:", s
+    else:
+        print "count:", s 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='query a tabix-indexed VCF file using another VCF and/or various parameters')
@@ -162,10 +200,12 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--bed', dest='querybed', default=None, help='tabix-indexed BED file (chrom, start, end, ...), query will return only results in overlapping regions')
     parser.add_argument('-m', '--mask', dest='maskbed', default=None, help='tabix-indexed BED file (chrom, start, end, ...), query will not return results in overlapping regions')
     parser.add_argument('-t', '--vtype', dest='vtype', default=None, help='only include variants of vtype where vtype is SNV, INDEL, or SV')
+    parser.add_argument('-o', '--outfile', dest='outfile', default=None, help='VCF output to file')
     parser.add_argument('-p', '--passonly', action='store_true', default=False, help='only return PASS records')
     parser.add_argument('-f', '--failonly', action='store_true', default=False, help='only return non-PASS records')
     parser.add_argument('-s', '--somaticonly', action='store_true', default=False, help='only return somatic records')
     parser.add_argument('-g', '--germlineonly', action='store_true', default=False, help='only return germline records')
-    parser.add_argument('-r', '--switch_report', action='store_true', default=False, help='report record in query VCF (-v/--vcf) instead of input VCF')
+    parser.add_argument('-r', '--switch_report', action='store_true', default=False, help='report record in query VCF (-v/--vcf required) instead of input VCF')
+    parser.add_argument('-i', '--return_sim', action='store_true', default=False, help='return meet/min similarity based on queryvcf (-v/--vcf required)')
     args = parser.parse_args()
     main(args)
