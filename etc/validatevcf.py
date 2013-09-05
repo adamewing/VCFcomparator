@@ -42,10 +42,10 @@ def context(vcf, recnum):
                 vcf_h.close()
                 return 
  
-if len(sys.argv) == 2:
-    assert sys.argv[1].endswith('.vcf') or sys.argv[1].endswith('.vcf.gz')
+def validatevcf(invcf):
+    assert invcf.endswith('.vcf') or invcf.endswith('.vcf.gz')
 
-    vcfin = vcf.Reader(filename=sys.argv[1])
+    vcfin = vcf.Reader(filename=invcf)
 
     recnum = 0
     try:
@@ -111,7 +111,10 @@ if len(sys.argv) == 2:
         traceback.print_exc(file=sys.stdout)
         print '-'*60
         print "context:"
-        context(sys.argv[1], recnum)
+        context(invcf, recnum)
 
-else:
-    print "usage:",sys.argv[0],"<vcf or vcf.gz>"
+if __name__ == '__main__':
+    if len(sys.argv) == 2:
+        validatevcf(sys.argv[1])
+    else:
+        print "usage:",sys.argv[0],"<vcf or vcf.gz>"
