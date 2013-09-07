@@ -51,7 +51,7 @@ def queryvcf(vcf_fn, silent=False, queryvcf=None, excludevcf=None, querybed=None
 
     #sys.stderr.write(','.join(map(str, (vcf_fn, queryvcf, excludevcf, querybed, maskbed, vtype, passonly, failonly, somaticonly, germlineonly, switch_report, outfile, similarity))) + "\n")
 
-    if None == queryvcf == querybed == excludevcf == vtype and not passonly and not failonly and not maskbed:
+    if None == queryvcf == querybed == excludevcf == vtype and not somaticonly and not germlineonly and not passonly and not failonly and not maskbed:
         sys.exit("nothing to do!")
 
     if True == passonly == failonly:
@@ -62,6 +62,8 @@ def queryvcf(vcf_fn, silent=False, queryvcf=None, excludevcf=None, querybed=None
 
     assert vcf_fn.endswith('.vcf') or vcf_fn.endswith('.vcf.gz') 
     vcfin = vcf.Reader(filename=vcf_fn)
+
+    assert vcfin is not None
 
     # initalize query BED if specified
     qbed = None
@@ -91,8 +93,9 @@ def queryvcf(vcf_fn, silent=False, queryvcf=None, excludevcf=None, querybed=None
     if similarity and not qvcf:
         sys.exit("cannot compute similarity without -v/--vcf")
     else:
-        for rec in qvcf:
-            n_query += 1
+        if qvcf is not None:
+            for rec in qvcf:
+                n_query += 1
 
     # variant type
     if vtype is not None:
